@@ -64,7 +64,7 @@ def main():
 
 문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
 {reasoning_start}문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.{reasoning_end}
-위 작성된 내용을 토대로 최종 정답을 출력합니다."""
+{solution_start}위 작성된 내용을 토대로 최종 정답만을 작성합니다.{solution_end}"""
 
 
     training_df = pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형.csv')
@@ -100,8 +100,8 @@ def main():
     #     "(?:" + re.escape(tokenizer.eos_token) + ")?"
 
     match_format = re.compile(
-        rf"{reasoning_end}(.+?)"\
-        # rf"{solution_start}(.+?)"\
+        # rf"{reasoning_end}(.+?)"\
+        rf"{solution_start}(.+?)"\
         rf"[\s]{{0,}}$",
         flags = re.DOTALL
     )
@@ -120,7 +120,7 @@ def main():
             score = 0
             response = completion[0]["content"]
             match = match_format.findall(response)
-            if match and ('<answer>' not in match[0]) and ('<think>' not in match[0]): score += 1.0
+            if match and ('<think>' not in match[0]) and ('</think>' not in match[0]) and ('<answer>' not in match[0]): score += 1.0
             scores.append(score)
         return scores
 
@@ -242,9 +242,10 @@ def main():
         lr_scheduler_type = "constant",
         optim = "adamw_8bit",
         logging_steps = 1,
+        repetition_penalty = 1.2,
         per_device_train_batch_size = 1,
         gradient_accumulation_steps = 16, # Increase to 4 for smoother training
-        num_generations = 16, # Decrease if out of memory
+        num_generations = 8, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
