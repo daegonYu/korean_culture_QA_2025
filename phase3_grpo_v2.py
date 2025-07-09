@@ -4,16 +4,26 @@ import torch
 import argparse
 from rouge_metric import Rouge
 import json
+from dotenv import load_dotenv
+import os
+import wandb
+from trl import GRPOConfig, GRPOTrainer
+import pandas as pd
+from datasets import Dataset
+import re
+import numpy as np
+from vllm import SamplingParams
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 3: GRPO Experiment")
     parser.add_argument("--model", default="kakaocorp/kanana-1.5-8b-instruct-2505", help="Model name to use")
-    parser.add_argument("--temperature", default=0.8, type=float, help="Sampling temperature")
+    parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
+    parser.add_argument("--lora_rank", default=32, type=int, help="LoRA rank")
 
     args = parser.parse_args()
 
     max_seq_length = 2048 # Can increase for longer reasoning traces
-    lora_rank = 32 # Larger rank = smarter, but slower
+    lora_rank = args.lora_rank # Larger rank = smarter, but slower
 
     model_name = args.model
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -45,26 +55,19 @@ def main():
     solution_start  = "<answer>"
     solution_end    = "</answer>"
 
-    system_prompt = f"""당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
+    system_prompt = f"""한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
 
-사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-- 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
-- 주제(topic_keyword): 문제의 핵심 키워드
-- 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
-- 질문 내용(question): 사용자가 직접 묻는 질문
+사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
+- 질문 유형(question_type): '선다형', '단답형'
+선다형 문제의 경우, 보기 번호 중 하나를 선택하십시오.
+단답형 문제의 경우, 단어 (구)로 답하십시오.
 
 문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
-{reasoning_start}
-문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.
-
-최종 정답은 다음 형식으로 작성하십시오:
-{solution_start}
+{reasoning_start}문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.{reasoning_end}
 위 작성된 내용을 토대로 최종 정답을 출력합니다."""
 
-    import pandas as pd
-    from datasets import Dataset
-    
-    training_df = pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train.csv')
+
+    training_df = pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형.csv')
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
     training_df['question'] = training_df['question'].astype(str).str.strip()
     training_df["prompt"] = training_df.apply(lambda row: (
@@ -73,7 +76,7 @@ def main():
         f"domain: {row['domain']}\n"
         f"topic_keyword: {row['topic_keyword']}\n"
         f"question_type: {row['question_type']}\n\n"
-        f"<질문>\n{row['question']}\n\n답변:"), axis=1)
+        f"질문: {row['question']}\n\n답변:"), axis=1)
 
     # 2. Dataset으로 변환
     dataset = Dataset.from_pandas(training_df[["prompt", "answer"]])
@@ -88,17 +91,17 @@ def main():
     })
 
     # 확인
+    print("Dataset loaded and formatted.")
     print(dataset[0])
     ### 마지막에 /answer tag가 있어야 통과
-    import re
 
     # Add optional EOS token matching
     # solution_end_regex = r"</answer>[\s]{0,}" + \
     #     "(?:" + re.escape(tokenizer.eos_token) + ")?"
 
     match_format = re.compile(
-        # rf"{reasoning_end}.*?"\
-        rf"{solution_start}(.+?)"\
+        rf"{reasoning_end}(.+?)"\
+        # rf"{solution_start}(.+?)"\
         rf"[\s]{{0,}}$",
         flags = re.DOTALL
     )
@@ -179,7 +182,7 @@ def main():
             user_txt = prompts[i][-1]["content"]
             # 3) question_type 파싱
             qt_m = re.search(r"question_type:\s*(선다형|단답형|서술형)", user_txt)
-            qtype = qt_m.group(1)
+            qtype = qt_m.group(1).strip()
 
             if qtype == "선다형":
                 scores.append(evaluate_multiple_choice(pred, true))
@@ -187,7 +190,6 @@ def main():
                 scores.append(evaluate_short_answer(pred, true))
             else: # "서술형"
                 scores.append(evaluate_long_answer(pred, true))
-
 
         return scores
 
@@ -198,7 +200,6 @@ def main():
     print(tokenizer.decode(tokenized[0]["tokens"]))
     tokenized = tokenized.map(lambda x: {"L" : len(x["tokens"])})
 
-    import numpy as np
     maximum_length = int(np.quantile(tokenized["L"], 1.0))
     print("Max Length = ", maximum_length)
 
@@ -208,49 +209,51 @@ def main():
     max_prompt_length = maximum_length + 1 # + 1 just in case!
     max_completion_length = max_seq_length - max_prompt_length
 
-    from vllm import SamplingParams
     vllm_sampling_params = SamplingParams(
-        top_p = 1.0,
-        top_k = 20,
+        min_p = 0.1,
+        top_p = 0.95,
+        top_k = -1,
         seed = 3407,
         stop = [tokenizer.eos_token],
         include_stop_str_in_output = True,
     )
 
-    num_train_epochs = 3
-    save_name = f"grpo_v1_{model_name.split('/')[-1]}"
+    num_train_epochs = 4
+    save_name = f"grpo_v2_{model_name.split('/')[-1]}"
 
     # ✅ wandb 초기화
-    import wandb
+    # .env 파일 로드
+    load_dotenv()
+    wandb_api_key = os.getenv("WANDB_API_KEY")
 
-    wandb.login(key="71705095151748b9e074d2df734a14ff43ee3291")
+    wandb.login(key=wandb_api_key)
 
     wandb.init(
         project="moducorpus_korea_culture",
         name=save_name,  # W&B에 기록됨
     )
 
-    from trl import GRPOConfig, GRPOTrainer
     training_args = GRPOConfig(
         vllm_sampling_params = vllm_sampling_params,
         temperature = args.temperature,
-        learning_rate = 5e-6,
+        learning_rate = 2e-6,
         weight_decay = 0.01,
-        warmup_ratio = 0.05,
-        lr_scheduler_type = "linear",
+        warmup_ratio = 0.03,
+        lr_scheduler_type = "constant",
         optim = "adamw_8bit",
         logging_steps = 1,
         per_device_train_batch_size = 1,
         gradient_accumulation_steps = 16, # Increase to 4 for smoother training
-        num_generations = 8, # Decrease if out of memory
+        num_generations = 16, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
         save_steps = 0.49 / num_train_epochs,
         report_to = "wandb", # Can use Weights & Biases
         output_dir = f"models/{save_name}",
-        log_completions = True
-
+        log_completions = True,
+        mask_truncated_completions = True,
+        shuffle_dataset = True,
         # For optional training + evaluation
         # fp16_full_eval = True,
         # per_device_eval_batch_size = 4,

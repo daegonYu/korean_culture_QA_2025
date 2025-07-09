@@ -106,7 +106,17 @@ def main():
     keep_idxs = [i for i, l in enumerate(lengths) if l <= max_length]
     dataset = dataset.select(keep_idxs)
 
-    # 7) SFTConfig 설정
+
+    import wandb
+    load_dotenv()
+    wandb_api_key = os.getenv("WANDB_API_KEY")
+
+    wandb.login(key=wandb_api_key)
+    wandb.init(
+        project="moducorpus_korea_culture",
+        name=f"sft_{args.model.split('/')[-1]}"
+    )
+
     num_train_epochs = 3
     training_args = SFTConfig(
         learning_rate = 1e-4,
@@ -121,14 +131,6 @@ def main():
         save_steps = 0.49 / num_train_epochs,
         output_dir = "models/sft_"+args.model.split("/")[-1],
         report_to = "wandb",
-    )
-
-    # 8) WandB 초기화 (선택)
-    import wandb
-    wandb.login()  # 환경변수에 API 키 세팅 필요
-    wandb.init(
-        project="moducorpus_korea_culture",
-        name=f"sft_{args.model.split('/')[-1]}"
     )
 
     # 9) SFTTrainer로 학습

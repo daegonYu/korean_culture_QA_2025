@@ -8,3 +8,4 @@ wandb.sh
 *.log
 *.ipynb
 *.out
+.env

@@ -233,7 +233,10 @@ def main():
     # ✅ wandb 초기화
     import wandb
 
-    wandb.login(key="71705095151748b9e074d2df734a14ff43ee3291")
+    load_dotenv()
+    wandb_api_key = os.getenv("WANDB_API_KEY")
+
+    wandb.login(key=wandb_api_key)
 
     wandb.init(
         project="moducorpus_korea_culture",
