@@ -14,3 +14,4 @@ nltk
 wandb
 unsloth
 unsloth_zoo
+python-dotenv
