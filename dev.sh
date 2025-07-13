@@ -12,5 +12,5 @@ model_list=(
 for model in "${model_list[@]}"
 do
     echo "Running model: $model"
-    nohup python run_phase1.py --model "$model" >> dev.log
+    nohup python run_phase1.py --model "$model" >> logs/dev.log
 done

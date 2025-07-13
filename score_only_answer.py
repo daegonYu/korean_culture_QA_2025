@@ -3,7 +3,7 @@ from phase1_prompting_experiment import PromptingExperiment
 
 def file_merge(json_path):
 
-    df= pd.read_json('data/test_with_answers.json')
+    df= pd.read_json('/workspace/korean_culture_QA_2025/data/preprocessed/test_with_answers.json')
 
     # JSON 파일 열기
     with open(json_path, 'r', encoding='utf-8') as f:
@@ -40,11 +40,11 @@ def main():
     with open(args.json_path.replace('.json', '_merged.json'), "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
     results = experiment.only_scoring(results)
-    print(results)
-    print('--')
+    # print(results)
+    # print('--')
     analysis = experiment.analyze_results(results)
     print(analysis)
-    experiment.print_analysis(analysis)
+    experiment.print_analysis(analysis, save_path=args.json_path.replace('.json','_result.md'))
 
 
 if __name__ == "__main__":

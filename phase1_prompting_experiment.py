@@ -1,33 +1,73 @@
 from __init__ import *
 
 class PromptingExperiment:
-    def __init__(self, model_name="beomi/Kanana-8B", load_model: bool = True):
+    def __init__(self, model_name="beomi/Kanana-8B", load_model=True, use_lora=False, use_wandb=False, \
+                system_prompt="", user_prompt="", answer_tag="<answer>"):
         """
         Phase 1: 프롬프팅 실험
         5가지 다른 프롬프트로 Kanana 8B 성능 테스트
         """
-        print(f"Loading {model_name}...")
+
         self.model_name = model_name
+        self.system_prompt = system_prompt
+        self.user_prompt = user_prompt
+        self.answer_tag = answer_tag
+        self.use_lora = use_lora
+        self.use_wandb = use_wandb
+
+        # wandb 초기화
+        if self.use_wandb:
+            load_dotenv()
+            wandb_api_key = os.getenv("WANDB_API_KEY")
+
+            wandb.login(key=wandb_api_key)
+
+            wandb.init(
+                project="moducorpus_korea_culture_answer_log",
+                name=f"{model_name.replace('/', '_')}",
+                config={
+                    "model_name": model_name,
+                    "load_model": load_model,
+                    "use_lora": self.use_lora,
+                    "system_prompt": system_prompt,
+                    "user_prompt_template": user_prompt,
+                    "answer_tag": answer_tag
+                }
+            )
+            self.wb_table = wandb.Table(columns=["prompt_system", "prompt_user", "answer"])
 
         self.llm = None
-        self.sampling_params = None
-        if load_model:
-            print(f"Loading {model_name}...")
+        self.lora_req = None
+        if load_model and not self.use_lora:
+            print(f"Loading {self.model_name}...")
             self.llm = LLM(
                 model=self.model_name,
                 dtype="bfloat16",     # 또는 "float16", "auto"
                 trust_remote_code=True,
-                max_model_len=1300,   # 최대 입력 길이
+                max_model_len=1024,   # 최대 입력 길이
                 gpu_memory_utilization=0.9,  # GPU 메모리 사용률
             )
-
-            # Sampling 파라미터 설정 (모델 로드 여부와 상관없이 준비)
-            self.sampling_params = SamplingParams(
-                max_tokens=2048,
-                temperature=0.6,
-                top_p=0.95
+        elif load_model and self.use_lora:
+            config = PeftConfig.from_pretrained(self.model_name)
+            base_model_name = config.base_model_name_or_path
+            print(f"Loading {self.model_name} with LoRA Layers...")
+            self.llm = LLM(
+                model=base_model_name,
+                dtype="bfloat16",     # 또는 "float16", "auto"
+                trust_remote_code=True,
+                max_model_len=1024,   # 최대 입력 길이
+                gpu_memory_utilization=0.9,  # GPU 메모리 사용률
+                enable_lora=self.use_lora,
             )
-            
+            self.lora_req = LoRARequest("adapter", 1, self.model_name)
+
+        # Sampling 파라미터 설정 (모델 로드 여부와 상관없이 준비)
+        self.sampling_params = SamplingParams(
+            max_tokens=2048,
+            temperature=0.6,
+            top_p=0.95
+        )
+                
     def load_data(self, data_path="data"):
         """데이터 로드"""
         data_dir = Path(data_path)
@@ -36,7 +76,7 @@ class PromptingExperiment:
             train_data = json.load(f)
         with open(data_dir / "dev.json", "r", encoding="utf-8") as f:
             dev_data = json.load(f)
-        with open(data_dir / "test.json", "r", encoding="utf-8") as f:
+        with open(data_dir / "preprocessed/test.json", "r", encoding="utf-8") as f:
             test_data = json.load(f)
         
         print(f"Loaded {len(train_data)} train, {len(dev_data)} dev" + (f", {len(test_data)} test" if test_data else ""))
@@ -51,67 +91,78 @@ class PromptingExperiment:
         topic_keyword = sample['input']['topic_keyword']
         
         prompts = {}
-        
+
+        system_prompt = self.system_prompt
+        user_prompt = self.user_prompt
+        user_prompt = user_prompt.format(
+            category=category,
+            domain=domain,
+            topic_keyword=topic_keyword,
+            question_type=question_type,
+            question=question
+        )
+
+
         # 0. System prompt: 전문가 역할 부여
-        system_prompt = """당신은 한국 문화 전문가입니다. 다음 질문에 정확하고 적절하게 답변해주세요.
-당신의 답변은 다음과 같은 형식을 따라야 합니다:
-1. **선다형 (Multiple Choice)**  
-   - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
+#         system_prompt = """당신은 한국 문화 전문가입니다. 다음 질문에 정확하고 적절하게 답변해주세요.
+# 당신의 답변은 다음과 같은 형식을 따라야 합니다:
+# 1. **선다형 (Multiple Choice)**  
+#    - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
 
-2. **단답형 (Short Answer)**  
-   - 5어절 이내의 **명사 또는 구**로 답하십시오.  
+# 2. **단답형 (Short Answer)**  
+#    - 5어절 이내의 **명사 또는 구**로 답하십시오.  
 
-3. **서술형 (Descriptive Answer)**  
-   - 500자 이내의 문장으로 설명하십시오."""
+# 3. **서술형 (Descriptive Answer)**  
+#    - 500자 이내의 문장으로 설명하십시오."""
 
-        detailed_system_prompt = """당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
+#         detailed_system_prompt = """당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
 
-사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-- 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
-- 주제(topic_keyword): 문제의 핵심 키워드
-- 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
-- 질문 내용(question): 사용자가 직접 묻는 질문
+# 사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
+# - 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
+# - 주제(topic_keyword): 문제의 핵심 키워드
+# - 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
+# - 질문 내용(question): 사용자가 직접 묻는 질문
 
-당신의 답변은 다음과 같은 형식을 따라야 합니다:
-1. **선다형 (Multiple Choice)**  
-   - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
+# 당신의 답변은 다음과 같은 형식을 따라야 합니다:
+# 1. **선다형 (Multiple Choice)**  
+#    - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
 
-2. **단답형 (Short Answer)**  
-   - 5어절 이내의 **명사 또는 구**로 답하십시오.  
+# 2. **단답형 (Short Answer)**  
+#    - 5어절 이내의 **명사 또는 구**로 답하십시오.  
 
-3. **서술형 (Descriptive Answer)**  
-   - 500자 이내의 문장으로 설명하십시오."""
+# 3. **서술형 (Descriptive Answer)**  
+#    - 500자 이내의 문장으로 설명하십시오."""
 
-        reasoning_start = "<think>" 
-        reasoning_end   = "</think>"
-        solution_start  = "<answer>"
-        solution_end    = "</answer>"
+        # reasoning_start = "<think>" 
+        # reasoning_end   = "</think>"
+        # solution_start  = "<answer>"
+        # solution_end    = "</answer>"
 
-        grpo_v1_system_prompt = f"""당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
+#         grpo_v1_system_prompt = f"""당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
 
-사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-- 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
-- 주제(topic_keyword): 문제의 핵심 키워드
-- 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
-- 질문 내용(question): 사용자가 직접 묻는 질문
+# 사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
+# - 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
+# - 주제(topic_keyword): 문제의 핵심 키워드
+# - 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
+# - 질문 내용(question): 사용자가 직접 묻는 질문
 
-답변은 다음과 같은 형식을 따라야 합니다:
-1. **선다형 (Multiple Choice)**  
-- 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
+# 답변은 다음과 같은 형식을 따라야 합니다:
+# 1. **선다형 (Multiple Choice)**  
+# - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
 
-2. **단답형 (Short Answer)**  
-- 5어절 이내의 **명사 또는 구**로 답하십시오.  
+# 2. **단답형 (Short Answer)**  
+# - 5어절 이내의 **명사 또는 구**로 답하십시오.  
 
-3. **서술형 (Descriptive Answer)**  
-- 500자 이내의 문장으로 설명하십시오.
+# 3. **서술형 (Descriptive Answer)**  
+# - 500자 이내의 문장으로 설명하십시오.
 
-문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
-{reasoning_start}
-문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.
+# 문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
+# {reasoning_start}
+# 문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.
 
-최종 정답은 다음 형식으로 작성하십시오:
-{solution_start}
-위 작성된 내용을 토대로 최종 정답만을 출력합니다."""
+# 최종 정답은 다음 형식으로 작성하십시오:
+# {solution_start}
+# 위 작성된 내용을 토대로 최종 정답만을 출력합니다."""
 
         # 1. Baseline: question만
         # prompts['baseline'] = {"system_prompt":system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n질문: {question}\n답변:"}
@@ -137,8 +188,10 @@ class PromptingExperiment:
 
         # prompts['detailed'] = {"system_prompt":detailed_system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n<질문>\n{question}\n\n답변:"}
 
-        prompts['grpo_v1'] = {"system_prompt":grpo_v1_system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n<질문>\n{question}\n\n답변:"}
+        # prompts['grpo_v1'] = {"system_prompt":grpo_v1_system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n<질문>\n{question}\n\n답변:"}
 
+        prompts['experiment'] = {"system_prompt":system_prompt, "user_prompt": user_prompt}
+        
         return prompts
     
     def generate_answer(self, prompt, max_length=512):
@@ -150,16 +203,31 @@ class PromptingExperiment:
             ]
 
             # 생성
-            outputs = self.llm.chat(
-                messages=messages,
-                sampling_params=self.sampling_params
-            )
+            if self.use_lora:
+                outputs = self.llm.chat(
+                    messages=messages,
+                    sampling_params=self.sampling_params,
+                    lora_request=self.lora_req
+                )
+            else:
+                outputs = self.llm.chat(
+                    messages=messages,
+                    sampling_params=self.sampling_params,
+                )
 
             # 디코딩 (입력 길이 이후만 추출)
             generated_text = outputs[0].outputs[0].text
             
             # 답변 정리
             answer = generated_text.strip()
+
+            # wandb 로그 추가
+            if self.use_wandb:
+                self.wb_table.add_data(
+                    prompt['system_prompt'],
+                    prompt['user_prompt'],
+                    answer
+                )
 
             # if '\n' in answer:
             #     answer = answer.split('\n')[0].strip()
@@ -329,9 +397,11 @@ class PromptingExperiment:
                 if test_mode:
                     continue  # 평가 스킵
 
-                if '<answer>' in pred_answer:
-                    pred_answer = pred_answer.split('<answer>')[-1].strip()
-                pred_answer = pred_answer.replace('*', '').strip()
+                original_answer = pred_answer
+                if self.answer_tag != '' and self.answer_tag in pred_answer:
+                    pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
+                pred_answer = pred_answer.replace('*', '')
+
                 
                 # 질문 유형별 평가
                 if question_type == "선다형":
@@ -345,7 +415,7 @@ class PromptingExperiment:
                     
                 else:  # 서술형
                     # 1) Rouge
-                    rouge_scores = self.evaluate_long_answer(pred_answer, true_answer)
+                    rouge_scores = self.evaluate_long_answer(original_answer, true_answer)
                     sample_results[f'{prompt_name}_rouge1'] = rouge_scores['rouge1']
                     sample_results[f'{prompt_name}_rouge2'] = rouge_scores['rouge2']
                     sample_results[f'{prompt_name}_rougeL'] = rouge_scores['rougeL']
@@ -371,9 +441,10 @@ class PromptingExperiment:
             results[question_type].append(sample_results)
             
             # 중간 저장 (10개마다)
-            if ((i + 1) % 10 == 0) or (i + 1 == len(data)) and save_results:
+            if ((i + 1) % 100 == 0) or (i + 1 == len(data)) and save_results:
                 self.save_intermediate_results(results, i + 1)
         
+        wandb.log({"prompts_and_answers": self.wb_table})
         return results
     
     def save_intermediate_results(self, results, current_idx):
@@ -477,42 +548,44 @@ class PromptingExperiment:
         
         return analysis
     
-    def print_analysis(self, analysis):
-        """분석 결과 출력"""
-        print("\n" + "="*80)
-        print("PHASE 1: PROMPTING EXPERIMENT RESULTS")
-        print("="*80)
+    def print_analysis(self, analysis, save_path="analysis_result.md"):
+        """분석 결과 출력 및 .md 파일 저장"""
+        output_lines = []
+
+        def write(line=""):
+            print(line)
+            output_lines.append(line)
+
+        write("\n" + "="*80)
+        write("PHASE 1: PROMPTING EXPERIMENT RESULTS")
+        write("="*80)
         
         for question_type, type_results in analysis.items():
-            print(f"\n📊 {question_type} 결과:")
-            print("-" * 50)
+            write(f"\n📊 {question_type} 결과:")
+            write("-" * 50)
             
             if question_type == "선다형":
                 for prompt_name, metrics in type_results.items():
-                    print(f"{prompt_name:15}: Accuracy = {metrics['accuracy']:.3f} (n={metrics['count']})")
+                    write(f"{prompt_name:15}: Accuracy = {metrics['accuracy']:.3f} (n={metrics['count']})")
                     
             elif question_type == "단답형":
                 for prompt_name, metrics in type_results.items():
-                    print(f"{prompt_name:15}: Exact = {metrics['exact_match']:.3f}, (n={metrics['count']})")
-                    # print(f"{prompt_name:15}: Exact = {metrics['exact_match']:.3f}, Partial = {metrics['partial_match']:.3f} (n={metrics['count']})")
+                    write(f"{prompt_name:15}: Exact = {metrics['exact_match']:.3f} (n={metrics['count']})")
                     
             else:  # 서술형
                 for prompt_name, metrics in type_results.items():
-                    print(
+                    write(
                         f"{prompt_name:15}: "
                         f"ROUGE-1 = {metrics['rouge1']:.3f}, "
                         f"ROUGE-2 = {metrics['rouge2']:.3f}, "
                         f"ROUGE-L = {metrics['rougeL']:.3f}, "
-                        f"BLEU = {metrics['bleu']:.3f}, "
-                        # f"BERTScore = {metrics['bertscore']:.3f}, "
-                        # f"BLEURT = {metrics['bleurt']:.3f} "
+                        f"BLEU = {metrics['bleu']:.3f} "
                         f"(n={metrics['count']})"
                     )
-        
-        # 전체 평균 (가중 평균)
-        print(f"\n🏆 종합 순위:")
-        print("-" * 30)
-        
+
+        write(f"\n🏆 종합 순위:")
+        write("-" * 30)
+
         prompt_scores = {}
         for prompt_name in analysis['선다형'].keys():
             total_score = 0
@@ -533,33 +606,38 @@ class PromptingExperiment:
             
             if total_count > 0:
                 prompt_scores[prompt_name] = total_score / total_count
-        
-        # 순위 정렬
+
+        # 순위 정렬 및 출력
         ranked_prompts = sorted(prompt_scores.items(), key=lambda x: x[1], reverse=True)
         for i, (prompt_name, score) in enumerate(ranked_prompts, 1):
-            print(f"{i}. {prompt_name:15}: {score:.3f}")
-    
+            write(f"{i}. {prompt_name:15}: {score:.3f}")
+        
+        # .md 파일 저장
+        with open(save_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(output_lines))
+
+
     def save_final_results(self, results, analysis):
         """최종 결과 저장"""
         # 상세 결과
-        with open(f'results/phase1_{self.model_name.split("/")[-1]}_detailed_results.json', 'w', encoding='utf-8') as f:
+        with open(f'results/phase1_{"_".join(self.model_name.split("/")[-2:])}_detailed_results.json', 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
         
         # 분석 요약
-        with open(f'results/phase1_{self.model_name.split("/")[-1]}_analysis_summary.json', 'w', encoding='utf-8') as f:
+        with open(f'results/phase1_{"_".join(self.model_name.split("/")[-2:])}_analysis_summary.json', 'w', encoding='utf-8') as f:
             json.dump(analysis, f, ensure_ascii=False, indent=2)
         
         print(f"\n💾 결과 저장 완료:")
-        print(f"   - phase1_{self.model_name.split('/')[-1]}_detailed_results.json")
-        print(f"   - phase1_{self.model_name.split('/')[-1]}_analysis_summary.json")
+        print(f"   - phase1_{'_'.join(self.model_name.split('/')[-2:])}_detailed_results.json")
+        print(f"   - phase1_{'_'.join(self.model_name.split('/')[-2:])}_analysis_summary.json")
 
 def main():
     """메인 실행 함수"""
-    print("🚀 Phase 1: Prompting Experiment with Kanana 8B")
+    print("🚀 Phase 1")
     print("="*60)
     
     # 실험 초기화
-    experiment = PromptingExperiment("beomi/Kanana-8B")
+    experiment = PromptingExperiment()
     
     # 데이터 로드
     train_data, dev_data, test_data = experiment.load_data()

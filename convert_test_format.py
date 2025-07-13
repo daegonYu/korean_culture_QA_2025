@@ -3,22 +3,20 @@ from collections import Counter
 
 # 경로 설정
 input_file = "/workspace/korean_culture_QA_2025/data/test.json"         # answer 없는 입력
-reference_file = "/workspace/korean_culture_QA_2025/results/test/prompt_v2/phase1_A.X-4.0-Light_test_outputs.json" # answer 포함된 예측 결과
-output_file = "/workspace/korean_culture_QA_2025/results/test/prompt_v2/phase1_A.X-4.0-Light_test_outputs_ex3.json"
+reference_file = "/workspace/korean_culture_QA_2025/results/test/grpo/skt_v2/phase1_checkpoint-228_merged_test_outputs.json" # answer 포함된 예측 결과
+output_file = f"{reference_file.replace('.json','_format.json')}"
 
 # 다수결 answer 추출
 def get_majority_answer(item):
     answers = [
-        item.get("rich_pred"),
-        item.get("format_aware_pred"),
-        item.get("detailed_pred")
+        item.get("experiment_pred")
     ]
     count = Counter(answers)
     most_common = count.most_common()
     if most_common[0][1] >= 2:
         return most_common[0][0]
     else:
-        return item.get("detailed_pred")
+        return item.get("experiment_pred")
 
 # 전체 처리
 def main():

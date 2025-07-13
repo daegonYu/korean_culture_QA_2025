@@ -15,6 +15,11 @@ def main():
     parser.add_argument("--sample_size", type=int, default=None, help="Number of samples to test (default: all)")
     parser.add_argument("--use_train", action="store_true", help="Use train set instead of dev set")
     parser.add_argument("--use_test", action="store_true", help="Use test set instead of dev set")
+    parser.add_argument("--use_lora", action="store_true", default=False, help="Use LoRA layers")
+    parser.add_argument("--use_wandb", action="store_true", default=False, help="Use WANDB")
+    parser.add_argument("--system_prompt", type=str, default="당신은 한국 문화 전문가입니다. 질문에 답하세요.")
+    parser.add_argument("--user_prompt", type=str, required=True)
+    parser.add_argument("--answer_tag", type=str, default="<answer>")
 
     args = parser.parse_args()
     
@@ -26,7 +31,14 @@ def main():
     print("="*60)
     
     # 실험 초기화
-    experiment = PromptingExperiment(args.model)
+    experiment = PromptingExperiment(
+        model_name=args.model,
+        system_prompt=args.system_prompt,
+        user_prompt=args.user_prompt,
+        answer_tag=args.answer_tag,
+        use_lora=args.use_lora,
+        use_wandb=args.use_wandb
+    )
     experiment.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # 데이터 로드
@@ -55,7 +67,7 @@ def main():
         experiment.print_analysis(analysis)
         experiment.save_final_results(results, analysis)
     else:
-        save_path = f'results/phase1_{args.model.split("/")[-1]}_test_outputs.json'
+        save_path = f"results/phase1_{'_'.join(args.model.split('/')[-2:])}_test_outputs.json"
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
         print(f"\n💾 테스트셋 결과 저장 완료: {save_path}")

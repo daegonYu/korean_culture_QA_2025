@@ -4,8 +4,10 @@
 /models
 /grpo_trainer_lora_model
 /wandb
+/logs
 wandb.sh
 *.log
 *.ipynb
 *.out
 .env
+openai_api.py

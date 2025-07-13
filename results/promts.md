@@ -108,3 +108,25 @@ prompts['format_aware'] = {"system_prompt":system_prompt, "user_prompt":f"주어
 
 prompts['detailed'] = {"system_prompt":detailed_system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n<질문>\n{question}\n\n답변:"}
 ```
+
+# v2 skt
+```
+system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
+
+사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
+- 질문 유형(question_type): '선다형', '단답형'
+선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
+단답형 문제의 경우, 단어 (구)로 작성하십시오.
+
+- 답변 형식
+당신은 사용자의 질문에 대해 먼저 머릿속으로 사고 과정을 거친 뒤, 그 과정을 설명하고 최종 답변을 제공합니다.  
+사고 과정은 `<think>...</think>` 태그 안에, 최종적인 답변은 `<answer>...</answer>` 태그 안에 작성하세요."""
+
+training_df["prompt"] = training_df.apply(lambda row: (
+        f"주어진 질문에 적절한 답변을 해주세요.\n\n"
+        f"category: {row['category']}\n"
+        f"domain: {row['domain']}\n"
+        f"topic_keyword: {row['topic_keyword']}\n"
+        f"question_type: {row['question_type']}\n\n"
+        f"질문: {row['question']}\n\n답변:"), axis=1)
+```

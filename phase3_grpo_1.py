@@ -18,7 +18,12 @@ def main():
     parser = argparse.ArgumentParser(description="Phase 3: GRPO Experiment")
     parser.add_argument("--model", default="kakaocorp/kanana-1.5-8b-instruct-2505", help="Model name to use")
     parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
-    parser.add_argument("--lora_rank", default=32, type=int, help="LoRA rank")
+    parser.add_argument("--lora_rank", default=8, type=int, help="LoRA rank")
+    parser.add_argument("--epochs", default=5, type=int, help="epochs")
+    parser.add_argument("--system_prompt", default='', type=str, help="system_prompt")
+    parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
+    parser.add_argument("--data_path", default='data/preprocessed/grpo_train.csv', type=str, help="data_path")
+    parser.add_argument("--save_name", default='', type=str, help="save_name")
 
     args = parser.parse_args()
 
@@ -50,24 +55,35 @@ def main():
     )
 
 
-    reasoning_start = "<think>" # Acts as <think>
-    reasoning_end   = "</think>"   # Acts as </think>
-    solution_start  = "<answer>"
-    solution_end    = "</answer>"
+    # reasoning_start = "<think>" # Acts as <think>
+    # reasoning_end   = "</think>"   # Acts as </think>
+    # solution_start  = "<answer>"
+    # solution_end    = "</answer>"
 
-    system_prompt = f"""한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
+#     system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
 
-사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-- 질문 유형(question_type): '선다형', '단답형'
-선다형 문제의 경우, 보기 번호 중 하나를 선택하십시오.
-단답형 문제의 경우, 단어 (구)로 답하십시오.
+# 사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
+# - 질문 유형(question_type): '선다형', '단답형'
+# 선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
+# 단답형 문제의 경우, 단어 (구)로 작성하십시오.
 
-문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
-{reasoning_start}문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.{reasoning_end}
-{solution_start}위 작성된 내용을 토대로 최종 정답만을 작성합니다.{solution_end}"""
+# - 답변 형식
+# 당신은 사용자의 질문에 대해 먼저 머릿속으로 사고 과정을 거친 뒤, 그 과정을 설명하고 최종 답변을 제공합니다.  
+# 사고 과정은 `<think>...</think>` 태그 안에, 최종적인 답변은 `<answer>...</answer>` 태그 안에 작성하세요."""
+
+# 그 다음 실험
+#     system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
+
+# 사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
+# - 질문 유형(question_type): '선다형', '단답형'
+# 선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
+# 단답형 문제의 경우, 단어 (구)로 작성하십시오.
+
+# - 답변 형식
+# step by step으로 문제를 풀기 위한 단계적인 사고 후 최종 답변은 `<answer></answer>` 태그 안에 작성하세요."""
 
 
-    training_df = pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형.csv')
+    training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
     training_df['question'] = training_df['question'].astype(str).str.strip()
     training_df["prompt"] = training_df.apply(lambda row: (
@@ -84,7 +100,7 @@ def main():
     # 3. Chat format으로 변환
     dataset = dataset.map(lambda x: {
         "prompt": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": args.system_prompt},
             {"role": "user", "content": x["prompt"]}
         ],
         "answer": x["answer"]
@@ -101,7 +117,7 @@ def main():
 
     match_format = re.compile(
         # rf"{reasoning_end}(.+?)"\
-        rf"{solution_start}(.+?)"\
+        rf"{args.solution_start}(.+?)"\
         rf"[\s]{{0,}}$",
         flags = re.DOTALL
     )
@@ -169,7 +185,7 @@ def main():
         3) 해당 evaluate_* 호출 → 점수 리스트 반환
         """
         # 1) raw 모델 출력만 꺼내기
-        responses = [c[0]["content"] for c in completions]
+        responses = [c[0]["content"].strip() for c in completions]
 
         # 2) <answer> 태그 내부 정답만 뽑기
         preds = []
@@ -189,7 +205,7 @@ def main():
             elif qtype == "단답형":
                 scores.append(evaluate_short_answer(pred, true))
             else: # "서술형"
-                scores.append(evaluate_long_answer(pred, true))
+                scores.append(evaluate_long_answer(responses[i], true))
 
         return scores
 
@@ -218,8 +234,8 @@ def main():
         include_stop_str_in_output = True,
     )
 
-    num_train_epochs = 4
-    save_name = f"grpo_v2_{model_name.split('/')[-1]}"
+    num_train_epochs = args.epochs
+    save_name = f"grpo_v3_{model_name.split('/')[-1]}_{args.save_name}"
 
     # ✅ wandb 초기화
     # .env 파일 로드
@@ -242,14 +258,14 @@ def main():
         lr_scheduler_type = "constant",
         optim = "adamw_8bit",
         logging_steps = 1,
-        repetition_penalty = 1.2,
+        repetition_penalty = 1.1,
         per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 16, # Increase to 4 for smoother training
+        gradient_accumulation_steps = 8, # Increase to 4 for smoother training
         num_generations = 8, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
-        save_steps = 0.49 / num_train_epochs,
+        save_steps = 0.5 / num_train_epochs,
         report_to = "wandb", # Can use Weights & Biases
         output_dir = f"models/{save_name}",
         log_completions = True,
