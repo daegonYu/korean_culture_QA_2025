@@ -268,7 +268,7 @@ class PromptingExperiment:
         correct = 0
         true_answer_list = true_answer.split('#')
 
-        if any(pred_answer.strip() == ans.strip() for ans in true_answer_list):
+        if any(pred_answer.replace(' ','') == ans.replace(' ','') for ans in true_answer_list):
             correct = 1
                 
         return correct
@@ -400,7 +400,7 @@ class PromptingExperiment:
                 original_answer = pred_answer
                 if self.answer_tag != '' and self.answer_tag in pred_answer:
                     pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
-                pred_answer = pred_answer.replace('*', '')
+                pred_answer = pred_answer.replace('*', '').replace('</answer>','')
 
                 
                 # 질문 유형별 평가
@@ -421,7 +421,7 @@ class PromptingExperiment:
                     sample_results[f'{prompt_name}_rougeL'] = rouge_scores['rougeL']
 
                     # 2) BLEU
-                    bleu_score = self.calc_BLEU(pred_answer, true_answer)
+                    bleu_score = self.calc_BLEU(original_answer, true_answer)
                     sample_results[f'{prompt_name}_bleu'] = bleu_score
 
                     # 3) BERTScore 
@@ -441,8 +441,8 @@ class PromptingExperiment:
             results[question_type].append(sample_results)
             
             # 중간 저장 (10개마다)
-            if ((i + 1) % 100 == 0) or (i + 1 == len(data)) and save_results:
-                self.save_intermediate_results(results, i + 1)
+            # if ((i + 1) % 100 == 0) or (i + 1 == len(data)) and save_results:
+            #     self.save_intermediate_results(results, i + 1)
         
         wandb.log({"prompts_and_answers": self.wb_table})
         return results
@@ -468,33 +468,41 @@ class PromptingExperiment:
             '서술형': []
         }
 
-        for q_type, samples in data.items():
+        for question_type, samples in data.items():
             for sample in samples:
                 rec = sample.copy()  # 원본 레코드 복사
 
                 # `_pred` 로 끝나는 필드만 찾아서 평가
-                for key, pred in sample.items():
+                for key, pred_answer in sample.items():
                     if not key.endswith('_pred'):
                         continue
 
                     name = key[:-5]  # 'rich_pred' -> 'rich'
-                    if '<answer>' in pred:
-                        pred = pred.split('<answer>')[-1].strip()
-                    pred = pred.replace('*', '').strip()
 
-                    # 질문 유형별 점수 계산
-                    if q_type == "선다형":
-                        rec[f'{name}_score'] = self.evaluate_multiple_choice(pred, rec['true_answer'])
-                    elif q_type == "단답형":
-                        rec[f'{name}_exact'] = self.evaluate_short_answer(pred, rec['true_answer'])
+                    original_answer = pred_answer
+                    if self.answer_tag != '' and self.answer_tag in pred_answer:
+                        pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
+                    pred_answer = pred_answer.replace('*', '').replace('</answer>','')
+                    
+                    # 질문 유형별 평가
+                    if question_type == "선다형":
+                        rec[f'{name}_score'] = self.evaluate_multiple_choice(pred_answer, rec['true_answer'])
+                        
+                    elif question_type == "단답형":
+                        ec[f'{name}_exact'] = self.evaluate_short_answer(pred_answer, rec['true_answer'])
+                        
                     else:  # 서술형
-                        rouge = self.evaluate_long_answer(pred, rec['true_answer'])
+                        # 1) Rouge
+                        rouge = self.evaluate_long_answer(original_answer, rec['true_answer'])
                         rec[f'{name}_rouge1'] = rouge['rouge1']
                         rec[f'{name}_rouge2'] = rouge['rouge2']
                         rec[f'{name}_rougeL'] = rouge['rougeL']
-                        rec[f'{name}_bleu']   = self.calc_BLEU(pred, rec['true_answer'])
 
-                results[q_type].append(rec)
+                        # 2) BLEU
+                        rec[f'{name}_bleu']   = self.calc_BLEU(original_answer, rec['true_answer'])
+
+
+                results[question_type].append(rec)
 
         return results
 

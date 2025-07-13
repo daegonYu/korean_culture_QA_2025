@@ -5,6 +5,8 @@
 /grpo_trainer_lora_model
 /wandb
 /logs
+/results
+/data
 wandb.sh
 *.log
 *.ipynb
