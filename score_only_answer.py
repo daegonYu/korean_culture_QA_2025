@@ -3,7 +3,7 @@ from phase1_prompting_experiment import PromptingExperiment
 
 def file_merge(json_path):
 
-    df= pd.read_json('/workspace/korean_culture_QA_2025/data/preprocessed/test_with_answers_2.json')
+    df= pd.read_csv('data/preprocessed/test_with_answers_no_websearch.csv')
 
     # JSON 파일 열기
     with open(json_path, 'r', encoding='utf-8') as f:
@@ -12,15 +12,15 @@ def file_merge(json_path):
     for idx, row in df.iterrows():
         if row['question_type'] == "선다형":
             for item in data['선다형']:
-                if item['question'] == row['question']:
+                if int(item['id']) == int(row['id']):
                     item['true_answer'] = row['only_answer']
         elif row['question_type'] == "단답형":
             for item in data['단답형']:
-                if item['question'] == row['question']:
+                if int(item['id']) == int(row['id']):
                     item['true_answer'] = row['only_answer']
         elif row['question_type'] == "서술형":
             for item in data['서술형']:
-                if item['question'] == row['question']:
+                if int(item['id']) == int(row['id']):
                     item['true_answer'] = row['only_answer']
 
     return data
@@ -29,13 +29,14 @@ def file_merge(json_path):
 def main():
     parser = argparse.ArgumentParser(description="Score-only evaluator for test.json")
     parser.add_argument("--json_path", type=str, help="Path to test.json file with model outputs and answers")
+    parser.add_argument("--answer_tag", type=str, help="answer_tag")
     args = parser.parse_args()
 
     if not os.path.exists(args.json_path):
         print(f"❌ 파일이 존재하지 않습니다: {args.json_path}")
         return
 
-    experiment = PromptingExperiment(load_model=False)
+    experiment = PromptingExperiment(load_model=False, answer_tag=args.answer_tag)
     results = file_merge(args.json_path)
     with open(args.json_path.replace('.json', '_merged.json'), "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)

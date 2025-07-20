@@ -18,8 +18,10 @@ from vllm import SamplingParams
 def main():
     parser = argparse.ArgumentParser(description="Phase 3: GRPO Experiment")
     parser.add_argument("--model", default="kakaocorp/kanana-1.5-8b-instruct-2505", help="Model name to use")
+    parser.add_argument("--prompt_template", required=True, help="Prompt template to use")
     parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
     parser.add_argument("--lora_rank", default=8, type=int, help="LoRA rank")
+    parser.add_argument("--lora_alpha", default=8, type=int, help="LoRA alpha")
     parser.add_argument("--epochs", default=5, type=int, help="epochs")
     parser.add_argument("--system_prompt", default='', type=str, help="system_prompt")
     parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
@@ -28,8 +30,9 @@ def main():
 
     args = parser.parse_args()
 
-    max_seq_length = 1000 # Can increase for longer reasoning traces
+    max_seq_length = 2048 # Can increase for longer reasoning traces
     lora_rank = args.lora_rank # Larger rank = smarter, but slower
+    lora_alpha = args.lora_alpha # Larger rank = smarter, but slower
 
     model_name = args.model
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -38,9 +41,10 @@ def main():
         # model_name = 'skt/A.X-4.0-Light',
         max_seq_length = max_seq_length,
         load_in_4bit = False, # False for LoRA 16bit
+        load_in_8bit = False,
         fast_inference = True, # Enable vLLM fast inference
         max_lora_rank = lora_rank,
-        gpu_memory_utilization = 0.8, # Reduce if out of memory
+        gpu_memory_utilization = 0.6, # Reduce if out of memory
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -50,51 +54,30 @@ def main():
             "q_proj", "k_proj", "v_proj", "o_proj",
             "gate_proj", "up_proj", "down_proj",
         ],
-        lora_alpha = lora_rank*2, # *2 speeds up training
+        lora_alpha = lora_alpha,
         use_gradient_checkpointing = "unsloth", # Reduces memory usage
         random_state = 3407,
     )
-
-
-    # reasoning_start = "<think>" # Acts as <think>
-    # reasoning_end   = "</think>"   # Acts as </think>
-    # solution_start  = "<answer>"
-    # solution_end    = "</answer>"
-
-#     system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-
-# 사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
-# - 질문 유형(question_type): '선다형', '단답형'
-# 선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
-# 단답형 문제의 경우, 단어 (구)로 작성하십시오.
-
-# - 답변 형식
-# 당신은 사용자의 질문에 대해 먼저 머릿속으로 사고 과정을 거친 뒤, 그 과정을 설명하고 최종 답변을 제공합니다.  
-# 사고 과정은 `<think>...</think>` 태그 안에, 최종적인 답변은 `<answer>...</answer>` 태그 안에 작성하세요."""
-
-# 그 다음 실험
-#     system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-
-# 사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
-# - 질문 유형(question_type): '선다형', '단답형'
-# 선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
-# 단답형 문제의 경우, 단어 (구)로 작성하십시오.
-
-# - 답변 형식
-# step by step으로 문제를 풀기 위한 단계적인 사고 후 최종 답변은 `<answer></answer>` 태그 안에 작성하세요."""
 
 
     training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
     training_df['question'] = training_df['question'].astype(str).str.strip()
 
-    training_df["prompt"] = training_df.apply(lambda row: (
-        f"주어진 질문에 적절한 답변을 해주세요.\n\n"
-        f"카테고리: {row['category']}\n"
-        f"도메인: {row['domain']}\n"
-        f"키워드: {row['topic_keyword']}\n"
-        f"질문 유형: {row['question_type']}\n\n"
-        f"질문: {row['question']}\n\n답변:"), axis=1)
+    prompt_template = args.prompt_template
+
+    prompts = []
+
+    for i in range(len(training_df)):
+        row = training_df.iloc[i]
+        prompt = prompt_template.format(
+            topic_keyword=row["topic_keyword"],
+            question_type=row["question_type"],
+            question=row["question"]
+        )
+        prompts.append(prompt)
+
+    training_df["prompt"] = prompts
 
     # 2. Dataset으로 변환
     dataset = Dataset.from_pandas(training_df[["prompt", "answer"]])
@@ -132,16 +115,17 @@ def main():
     def evaluate_multiple_choice(pred_answer: str, true_answer: str) -> float:
         """선다형: 보기 번호(1-5) 중 하나가 정답과 일치하면 1.0, 아니면 0.0"""
         # nums = re.findall(r"\b[1-5]\b", pred_answer)
-        nums = re.findall(r"\b([1-5])[\.\)]?", pred_answer)
+        nums = re.findall(r"[1-5]", pred_answer)
         pred = nums[0] if nums else pred_answer.strip()
-        if (pred_answer.strip() == pred) and (pred == true_answer):
+        if pred == true_answer:
             return 1.0
-        return 0.5 if pred == true_answer else 0.0
+        return 0.0
 
     def evaluate_short_answer(pred_answer: str, true_answer: str) -> float:
         """단답형: 정답 후보를 '#'로 분리해서 exact match 검사"""
-        for ans in true_answer.split("#"):
-            if pred_answer.replace(" ", "") == ans.replace(" ", ""):
+        for t_ans in true_answer.split("#"):
+            # if pred_answer.replace(" ", "") == ans.replace(" ", ""):
+            if pred_answer.strip() == t_ans:
                 return 1.0
         return 0.0
 
@@ -180,7 +164,7 @@ def main():
         for i, (pred, true) in enumerate(zip(preds, answer)):
             user_txt = prompts[i][-1]["content"]
             # 3) question_type 파싱
-            qt_m = re.search(r"질문 유형: (선다형|단답형|서술형)", user_txt)
+            qt_m = re.search(r"문제 유형: (선다형|단답형|서술형)", user_txt)
             qtype = qt_m.group(1).strip()
 
             if qtype == "선다형":
@@ -218,7 +202,7 @@ def main():
     )
 
     num_train_epochs = args.epochs
-    save_name = f"grpo_v3_{model_name.split('/')[-1]}_{args.save_name}"
+    save_name = f"grpo_v5_{model_name.split('/')[-1]}_{args.save_name}"
 
     # ✅ wandb 초기화
     # .env 파일 로드
@@ -235,20 +219,23 @@ def main():
     training_args = GRPOConfig(
         vllm_sampling_params = vllm_sampling_params,
         temperature = args.temperature,
-        learning_rate = 2e-6,
+        learning_rate = 5e-6,
         weight_decay = 0.01,
-        warmup_ratio = 0.03,
-        lr_scheduler_type = "constant",
+        warmup_ratio = 0.05,
+        beta=0,
+        # lr_scheduler_type = "constant",
         optim = "adamw_8bit",
+        loss_type = "dr_grpo",
+        scale_rewards = False, # dr_grpo의 경우 False 권장
         logging_steps = 1,
         repetition_penalty = 1.1,
         per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 8, # Increase to 4 for smoother training
-        num_generations = 8, # Decrease if out of memory
+        gradient_accumulation_steps = 8,
+        num_generations = 16, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
-        save_steps = 0.5 / num_train_epochs,
+        save_steps = 0.49 / num_train_epochs,
         report_to = "wandb", # Can use Weights & Biases
         output_dir = f"models/{save_name}",
         log_completions = True,

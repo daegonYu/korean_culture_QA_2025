@@ -1,15 +1,29 @@
 import json
 from collections import Counter
-import re
 
 # 경로 설정
 input_file = "/workspace/korean_culture_QA_2025/data/test.json"
 # answer 포함된 예측 결과
-reference_file = "/workspace/korean_culture_QA_2025/results/phase1_grpo_v3_A.X-4.0-Light_curri_선다형_단답형_v1_checkpoint-16_test_outputs.json"
-answer_tag = '정답:'
-# answer_tag = '<answer>'
+reference_file = "/workspace/korean_culture_QA_2025/results/test/prompt_v2/phase1_kanana-1.5-8b-instruct-2505_intermediate_results_394.json"
+# answer_tag = '정답:'
+answer_tag = '<answer>'
 output_file = f"{reference_file.replace('.json','_test_format.json')}"
 
+# 다수결 answer 추출
+def get_majority_answer(item):
+    answers = [
+        # item.get("experiment_pred")
+        item.get("rich_pred"),
+        item.get("format_aware_pred"),
+        item.get("detailed_pred")
+    ]
+    count = Counter(answers)
+    most_common = count.most_common()
+    if most_common[0][1] >= 2:
+        return most_common[0][0]
+    else:
+        return item.get("format_aware_pred")
+        # return item.get("experiment_pred")
 
 # 전체 처리
 def main():
@@ -31,10 +45,9 @@ def main():
     for item in input_data:
         qid = item["id"]
         matched = ref_dict.get(qid)
-        if matched['question_type'] == '선다형':
-            item["output"] = {"answer": re.search(r'\d', matched["experiment_pred"].split(answer_tag)[-1].strip()).group(0)}
-        else:
-            item["output"] = {"answer": matched["experiment_pred"].split(answer_tag)[-1].replace('</answer>','').strip()}
+
+        # item["output"] = {"answer": matched.get("experiment_pred").split(answer_tag)[-1].replace('</answer>','').strip()}
+        item["output"] = {"answer": get_majority_answer(matched)}
 
     # 저장
     with open(output_file, "w", encoding="utf-8") as f:

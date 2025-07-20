@@ -171,44 +171,12 @@ user_prompt="아래 문제를 단계별로 자세히 해설해주고, 마지막�
 # nohup python phase3_grpo_5.py \
 # --model "skt/A.X-4.0-Light" --epochs 4 --temperature 1.2 --lora_rank 16 --lora_alpha 16 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v1_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_curriculum.csv" --system_prompt "$system_prompt"
 
-# nohup python phase3_grpo_5.py \
-# --model "skt/A.X-4.0-Light" --epochs 4 --temperature 1.2 --lora_rank 16 --lora_alpha 16 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v2_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_curriculum_v2.csv" --system_prompt "$system_prompt"
-
-# paths=(
-#     "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2"
-# )
-# answer_tag="정답:"
-
-# for path in "${paths[@]}"; do
-#     echo "🔍 상위 경로: $path"
-#     find "$path" -mindepth 1 -type d | while read -r model; do
-#         echo "🔍 현재 경로: $model"
-#         nohup python run_phase1.py --model "$model" --use_test --use_wandb --use_lora \
-#         --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
-
-#         dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#         checkpoint=$(basename "$model")            # "checkpoint-112"
-#         model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#         echo "Model name: $model_name"
-
-#         json_path="results/phase1_${model_name}_test_outputs.json"
-#         echo "Scoring: $json_path"
-#         python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-#     done
-# done
-
-
 nohup python phase3_grpo_5.py \
---model "K-intelligence/Midm-2.0-Base-Instruct" --epochs 4 --temperature 1.0 --lora_rank 8 --lora_alpha 8 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v1_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_midm_curriculum.csv" --system_prompt "$system_prompt"
-
-nohup python phase3_grpo_5.py \
---model "K-intelligence/Midm-2.0-Base-Instruct" --epochs 4 --temperature 1.0 --lora_rank 8 --lora_alpha 8 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v2_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_midm_curriculum_v2.csv" --system_prompt "$system_prompt"
+--model "skt/A.X-4.0-Light" --epochs 4 --temperature 1.2 --lora_rank 16 --lora_alpha 16 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v2_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_curriculum_v2.csv" --system_prompt "$system_prompt"
 
 paths=(
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v2_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2"
 )
 answer_tag="정답:"
 
@@ -230,3 +198,35 @@ for path in "${paths[@]}"; do
         python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
     done
 done
+
+
+# nohup python phase3_grpo_5.py \
+# --model "K-intelligence/Midm-2.0-Base-Instruct" --epochs 4 --temperature 1.0 --lora_rank 8 --lora_alpha 8 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v1_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_midm_curriculum.csv" --system_prompt "$system_prompt"
+
+# nohup python phase3_grpo_5.py \
+# --model "K-intelligence/Midm-2.0-Base-Instruct" --epochs 4 --temperature 1.0 --lora_rank 8 --lora_alpha 8 --solution_start "정답:" --prompt_template "$user_prompt" --save_name "curri_선다형_단답형_v2_prompt2" --data_path "data/preprocessed/grpo_train_excluded_서술형_midm_curriculum_v2.csv" --system_prompt "$system_prompt"
+
+# paths=(
+#     "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2"
+#     "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v2_prompt2"
+# )
+# answer_tag="정답:"
+
+# for path in "${paths[@]}"; do
+#     echo "🔍 상위 경로: $path"
+#     find "$path" -mindepth 1 -type d | while read -r model; do
+#         echo "🔍 현재 경로: $model"
+#         nohup python run_phase1.py --model "$model" --use_test --use_wandb --use_lora \
+#         --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
+
+#         dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
+#         checkpoint=$(basename "$model")            # "checkpoint-112"
+#         model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
+
+#         echo "Model name: $model_name"
+
+#         json_path="results/phase1_${model_name}_test_outputs.json"
+#         echo "Scoring: $json_path"
+#         python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
+#     done
+# done

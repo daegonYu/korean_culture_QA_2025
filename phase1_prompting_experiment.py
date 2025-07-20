@@ -241,7 +241,8 @@ class PromptingExperiment:
     def evaluate_multiple_choice(self, pred_answer, true_answer):
         """선다형 평가"""
         # 숫자 추출
-        pred_nums = re.findall(r'\b[1-5]\b', pred_answer)
+        # pred_nums = re.findall(r'\b[1-5]\b', pred_answer)
+        pred_nums = re.findall(r'[1-5]', pred_answer)
         if pred_nums:
             pred = pred_nums[0]
         else:
@@ -250,25 +251,14 @@ class PromptingExperiment:
         return 1 if pred == true_answer else 0
     
     def evaluate_short_answer(self, pred_answer, true_answer):
-        # """단답형 평가"""
-        # pred_clean = re.sub(r'[^\w가-힣]', '', pred_answer.lower())
-        # true_clean = re.sub(r'[^\w가-힣]', '', true_answer.lower())
-        
-        # # Exact match
-        # exact_match = 1 if pred_clean == true_clean else 0
-        
-        # # Partial match (포함 관계)
-        # partial_match = 1 if true_clean in pred_clean or pred_clean in true_clean else 0
-        
-        # return exact_match, partial_match
-
         """
         Calculate Exact Match score where true_data may contain multiple acceptable answers separated by #
         """
         correct = 0
         true_answer_list = true_answer.split('#')
 
-        if any(pred_answer.replace(' ','') == ans.replace(' ','') for ans in true_answer_list):
+        # if any(pred_answer.replace(' ','') == ans.replace(' ','') for ans in true_answer_list):
+        if any(pred_answer == true_answer for true_answer in true_answer_list):
             correct = 1
                 
         return correct
@@ -483,13 +473,16 @@ class PromptingExperiment:
                     if self.answer_tag != '' and self.answer_tag in pred_answer:
                         pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
                     pred_answer = pred_answer.replace('*', '').replace('</answer>','')
-                    
+                    if rec['true_answer'] is None:
+                        print('# 불량')
+                        print(rec)
+
                     # 질문 유형별 평가
                     if question_type == "선다형":
                         rec[f'{name}_score'] = self.evaluate_multiple_choice(pred_answer, rec['true_answer'])
                         
                     elif question_type == "단답형":
-                        ec[f'{name}_exact'] = self.evaluate_short_answer(pred_answer, rec['true_answer'])
+                        rec[f'{name}_exact'] = self.evaluate_short_answer(pred_answer, rec['true_answer'])
                         
                     else:  # 서술형
                         # 1) Rouge

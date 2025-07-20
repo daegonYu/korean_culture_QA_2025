@@ -11,5 +11,7 @@ wandb.sh
 *.log
 *.ipynb
 *.out
+*.json
+*.csv
 .env
 openai_api.py
