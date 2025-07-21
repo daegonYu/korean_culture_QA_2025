@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
     parser.add_argument("--data_path", default='data/preprocessed/grpo_train.csv', type=str, help="data_path")
     parser.add_argument("--save_name", default='', type=str, help="save_name")
+    parser.add_argument("--num_iterations", default=1, type=int, help="Number of iterations for training")
 
     args = parser.parse_args()
 
@@ -240,7 +241,7 @@ def main():
         output_dir = f"models/{save_name}",
         log_completions = True,
         mask_truncated_completions = True,
-        shuffle_dataset = True,
+        shuffle_dataset = False,        # 이미 쉬운 순으로 정렬된 데이터임
         # For optional training + evaluation
         # fp16_full_eval = True,
         # per_device_eval_batch_size = 4,
