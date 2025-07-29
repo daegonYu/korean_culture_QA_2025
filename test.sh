@@ -1,278 +1,54 @@
 #!/usr/bin/env bash
 set -e
 
-# model_list=(
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_단답형_epoch_8/checkpoint-100"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_단답형_epoch_8/checkpoint-120"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_단답형_epoch_8/checkpoint-140"
-# )
+system_prompt="당신은 한국의 문화와 관련된 문제를 전문적으로 풀이해주는 문제 해설가입니다.  
+사용자가 입력한 문제에 대해 단계별로 차근차근(step by step) 설명하여 **문제 해설**과 **정답**을 제시하세요.  
 
-# for model in "${model_list[@]}"
-# do
-#     echo "Running model: $model"
-#     system_prompt="한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-# 주어진 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
-
-# - 답변 형식
-# <think></think> 태그 안에 문제를 풀기 위한 논리적 사고 후 최종 답변은 <answer></answer> 태그 안에 작성하세요."
-#     user_prompt="주어진 질문에 적절한 답변을 해주세요.\n\n카테고리: {category}\n도메인: {domain}\n키워드: {topic_keyword}\n질문 유형: {question_type}\n\n질문: {question}\n\n답변:"
-#     answer_tag="<answer>"
-
-#     nohup python run_phase1.py --model "$model" --use_test --use_lora --use_wandb \
-#     --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
-
-#     dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#     checkpoint=$(basename "$model")            # "checkpoint-112"
-#     model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#     echo "Model name: $model_name"
-
-#     # Phase 2: Scoring
-#     json_path="results/phase1_${model_name}_test_outputs.json"
-#     echo "Scoring: $json_path"
-#     python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-# done
-
-
-
-
-# model_list=(
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_서술형/checkpoint-18"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_서술형/checkpoint-27"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_서술형/checkpoint-36"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_서술형/checkpoint-45"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_서술형/checkpoint-54"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_서술형/checkpoint-72"
-# )
-
-# for model in "${model_list[@]}"
-# do
-#     echo "Running model: $model"
-#     system_prompt="한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-# 주어진 문제에 대해 적절한 답변을 서술하십시오."
-#     user_prompt="주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n질문: {question}\n\n답변:"
-#     answer_tag=""
-
-#     nohup python run_phase1.py --model "$model" --use_test --use_lora --use_wandb \
-#     --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
-
-#     dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#     checkpoint=$(basename "$model")            # "checkpoint-112"
-#     model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#     echo "Model name: $model_name"
-
-#     # Phase 2: Scoring
-#     json_path="results/phase1_${model_name}_test_outputs.json"
-#     echo "Scoring: $json_path"
-#     python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-# done
-
-
-
-# model_list=(
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형/checkpoint-40"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형/checkpoint-60"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형/checkpoint-80"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형/checkpoint-100"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형/checkpoint-140"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형/checkpoint-180"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_temperature-07/checkpoint-100"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_temperature-07/checkpoint-140"
-#     "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_temperature-07/checkpoint-180"
-# )
-
-# for model in "${model_list[@]}"
-# do
-#     echo "Running model: $model"
-#     system_prompt="한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-# 주어진 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
-
-# - 답변 형식
-# <think></think> 태그 안에 문제를 풀기 위한 논리적 사고 후 최종 답변은 <answer></answer> 태그 안에 선다형 번호만 작성하세요."
-#     user_prompt="주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n질문: {question}\n\n답변:"
-#     answer_tag="<answer>"
-
-#     nohup python run_phase1.py --model "$model" --use_test --use_lora --use_wandb \
-#     --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
-
-#     dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#     checkpoint=$(basename "$model")            # "checkpoint-112"
-#     model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#     echo "Model name: $model_name"
-
-#     # Phase 2: Scoring
-#     json_path="results/phase1_${model_name}_test_outputs.json"
-#     echo "Scoring: $json_path"
-#     python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-# done
-
-
-# model_list=(
-#     "skt/A.X-4.0-Light"
-    # "skt/A.X-3.1-Light"
-    # "kakaocorp/kanana-1.5-8b-instruct-2505"
-    # "MLP-KTLim/llama-3-Korean-Bllossom-8B"
-    # "Qwen/Qwen3-8B"
-# )
-
-
-# for model in "${model_list[@]}"
-# do
-#     echo "Running model: $model"
-#     system_prompt="주어진 문제에 적절한 답변을 서술하십시오.
-
-# - 답변 형식
-# 답변 근거를 '답변 근거:'에 서술한 뒤 최종 정답을 '정답:'에 작성하십시오."
-#     user_prompt="주어진 질문에 적절한 답변을 해주세요.\n\n카테고리: {category}\n도메인: {domain}\n키워드: {topic_keyword}\n질문 유형: {question_type}\n\n질문: {question}\n\n답변:"
-#     answer_tag="정답:"
-
-#     nohup python run_phase1.py --model "$model" --use_test --use_wandb \
-#     --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
-
-#     dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#     checkpoint=$(basename "$model")            # "checkpoint-112"
-#     model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#     echo "Model name: $model_name"
-
-#     # Phase 2: Scoring
-#     json_path="results/phase1_${model_name}_test_outputs.json"
-#     echo "Scoring: $json_path"
-#     python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-# done
-
-
-# model_list=(
-#     "skt/A.X-4.0-Light"
-#     "skt/A.X-3.1-Light"
-#     "kakaocorp/kanana-1.5-8b-instruct-2505"
-#     "MLP-KTLim/llama-3-Korean-Bllossom-8B"
-#     # "Qwen/Qwen3-8B"
-#     # "Qwen/Qwen3-14B-FP8"
-# )
-
-
-# for model in "${model_list[@]}"
-# do
-#     echo "Running model: $model"
-#     system_prompt="당신은 한국의 문화와 관련된 문제를 전문적으로 풀이해주는 문제 해설가입니다.  
-# 사용자가 입력한 문제에 대해 정확하고 친절하게 **문제 해설**과 **정답**을 제시하세요.  
-# 답변 형식은 반드시 다음과 같이 작성하세요:  
-# 문제 해설: ...  
-# 정답: ..."
-#     user_prompt="아래 문제를 해설해주고 정답을 알려줘.\n반드시 문제 해설 다음에 정답을 작성해줘.\n\n카테고리: {category}\n도메인: {domain}\n키워드: {topic_keyword}\n문제 유형: {question_type}\n\n문제: {question}\n\n답변:"
-#     answer_tag="정답:"
-
-#     nohup python run_phase1.py --model "$model" --use_test --use_wandb \
-#     --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
-
-#     dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#     checkpoint=$(basename "$model")            # "checkpoint-112"
-#     model_name="${dir_name}_${checkpoint}_v2"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#     echo "Model name: $model_name"
-
-#     # Phase 2: Scoring
-#     json_path="results/phase1_${model_name}_test_outputs.json"
-#     echo "Scoring: $json_path"
-#     python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-# done
-
-
-
-model_list=(
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v2/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v3/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v4/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v5/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v6/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v7/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v8/checkpoint-70"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-10"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-20"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-30"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-40"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-50"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-60"
-    # "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v9/checkpoint-70"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-10"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-20"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-30"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-40"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-50"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-60"
-    "/workspace/korean_culture_QA_2025/models/grpo_v3_A.X-4.0-Light_선다형_v10/checkpoint-70"
-)
-
-
-for model in "${model_list[@]}"
-do
-    echo "Running model: $model"
-    system_prompt="당신은 한국의 문화와 관련된 문제를 전문적으로 풀이해주는 문제 해설가입니다.  
-사용자가 입력한 문제에 대해 정확하고 친절하게 **문제 해설**과 **정답**을 제시하세요.  
 답변 형식은 반드시 다음과 같이 작성하세요:  
-문제 해설: ...  
-정답: ..."
-    user_prompt="아래 문제를 해설해주고 정답을 알려줘.\n반드시 문제 해설 다음에 정답을 작성해줘.\n\n카테고리: {category}\n도메인: {domain}\n키워드: {topic_keyword}\n문제 유형: {question_type}\n\n문제: {question}\n\n답변:"
-    answer_tag="정답:"
+문제 해설: (문제에 대한 배경, 개념 설명, 선택지 또는 정답 후보 분석 등 단계별로 논리적인 추론 과정을 포함)  
+정답: (정답만 간결하게 작성)
 
-    nohup python run_phase1.py --model "$model" --use_test --use_wandb --use_lora \
-    --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" >> logs/test.log
+※ 정답 작성 형식 안내  
+- 선다형 문제일 경우: **정답 번호**만 작성하세요.  
+- 단답형 문제일 경우:  
+    - 정답이 1개인 경우: 괄호, 한자 없이 **한글** 또는 **영어**를 사용하세요. (예: 사과 또는 apple)  
+    - 정답이 여러 개인 경우: 쉼표(,)로 구분해 나열하세요. (예: 사과, 배)  
+    - 순서 배열 문제인 경우: '-'로 구분해 정확한 순서를 유지해 나열하세요. (예: ㄱ-ㄴ-ㄷ-ㄹ)"
 
-    dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-    checkpoint=$(basename "$model")            # "checkpoint-112"
-    model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
+user_prompt="아래 문제를 단계별로 자세히 해설해주고, 마지막에 정답을 작성해줘.  
 
-    echo "Model name: $model_name"
+키워드: {topic_keyword}  
+문제 유형: {question_type}  
+문제: {question}"
 
-    # Phase 2: Scoring
-    json_path="results/phase1_${model_name}_test_outputs.json"
-    echo "Scoring: $json_path"
-    python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
+answer_tag="정답:"
+
+
+paths=(
+    "/workspace/korean_culture_QA_2025/models/grpo_v4_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v4_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2_v2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v4_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v2_prompt2"
+)
+for path in "${paths[@]}"; do
+    echo "🔍 상위 경로: $path"
+    find "$path" -mindepth 1 -type d | while read -r model; do
+        echo "🔍 현재 경로: $model"
+        nohup python run_phase1.py --model "$model" --use_test --use_wandb --use_lora \
+        --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" --max_lora_rank 64
+
+        dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
+        checkpoint=$(basename "$model")            # "checkpoint-112"
+        model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
+
+        echo "Model name: $model_name"
+
+        json_path="results/phase1_${model_name}_test_outputs.json"
+        echo "Scoring: $json_path"
+        python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
+    done
 done
-
-

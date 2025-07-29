@@ -129,7 +129,7 @@ def main():
     )
 
     num_train_epochs = args.epochs
-    save_name = f"grpo_v4_{model_name.split('/')[-1]}_{args.save_name}"
+    save_name = f"grpo_v6_{model_name.split('/')[-1]}_{args.save_name}"
 
     # ✅ wandb 초기화
     # .env 파일 로드
@@ -153,8 +153,8 @@ def main():
         optim = "adamw_8bit",
         logging_steps = 1,
         repetition_penalty = 1.05,
-        per_device_train_batch_size = 4,
-        gradient_accumulation_steps = 4,
+        per_device_train_batch_size = 16,
+        gradient_accumulation_steps = 1,
         num_generations = 16, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
@@ -164,7 +164,7 @@ def main():
         output_dir = f"models/{save_name}",
         log_completions = True,
         mask_truncated_completions = True,
-        shuffle_dataset = False,
+        shuffle_dataset = True,
         # For optional training + evaluation
         # fp16_full_eval = True,
         # per_device_eval_batch_size = 4,
@@ -183,6 +183,7 @@ def main():
         reward_funcs = [
             match_format_exactly,
             check_answer,
+            penalize_english_overuse
         ],
         args = training_args,
         train_dataset = dataset,

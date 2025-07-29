@@ -5,7 +5,7 @@ import re
 # 경로 설정
 input_file = "/workspace/korean_culture_QA_2025/data/test.json"
 # answer 포함된 예측 결과
-reference_file = "/workspace/korean_culture_QA_2025/results/phase1_grpo_v3_A.X-4.0-Light_curri_선다형_단답형_v1_checkpoint-16_test_outputs.json"
+reference_file = "/workspace/korean_culture_QA_2025/results/phase1_grpo_v4_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2_checkpoint-104_test_outputs.json"
 answer_tag = '정답:'
 # answer_tag = '<answer>'
 output_file = f"{reference_file.replace('.json','_test_format.json')}"

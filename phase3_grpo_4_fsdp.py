@@ -1,19 +1,21 @@
 # !pip install unsloth unsloth_zoo
-from unsloth import FastLanguageModel
 import torch
-import argparse
 from rouge_metric import Rouge
 from bert_score import score as bert_score
-import json
 from dotenv import load_dotenv
+from transformers import AutoModelForCausalLM
+from transformers import AutoTokenizer
+from peft import get_peft_model, LoraConfig
+from trl import GRPOConfig, GRPOTrainer
+from vllm import SamplingParams
+from datasets import Dataset
+import pandas as pd
+import re
+import json
 import os
 import wandb
-from trl import GRPOConfig, GRPOTrainer
-import pandas as pd
-from datasets import Dataset
-import re
 import numpy as np
-from vllm import SamplingParams
+import argparse
 from reward_func import *
 
 def main():
@@ -41,28 +43,29 @@ def main():
     lora_alpha = args.lora_alpha # Larger rank = smarter, but slower
 
     model_name = args.model
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = model_name, # Use Qwen3-4B-Base for 4B model
-        max_seq_length = max_seq_length,
-        load_in_4bit = False, # False for LoRA 16bit
-        load_in_8bit = False,
-        fast_inference = True, # Enable vLLM fast inference
-        max_lora_rank = lora_rank,
-        gpu_memory_utilization = 0.6, # Reduce if out of memory
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        use_fast=True,
+        trust_remote_code=True
     )
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r = lora_rank, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-        target_modules = [
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
-        ],
-        lora_alpha = lora_alpha,
-        use_gradient_checkpointing = "unsloth", # Reduces memory usage
-        random_state = 3407,
-    )
-
+    # lora_config = LoraConfig(
+    #     r=args.lora_rank,
+    #     lora_alpha=args.lora_alpha,
+    #     # target_modules=[
+    #     #     "q_proj", "k_proj", "v_proj", "o_proj",
+    #     #     "gate_proj", "up_proj", "down_proj"
+    #     # ],
+    #     target_modules = 'all-linear',  # Use all linear layers
+    #     bias="none",
+    #     task_type="CAUSAL_LM",
+    # )
+    # model = get_peft_model(model, lora_config)
 
     training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
@@ -119,15 +122,6 @@ def main():
     max_prompt_length = maximum_length + 1 # + 1 just in case!
     max_completion_length = max_seq_length - max_prompt_length
 
-    vllm_sampling_params = SamplingParams(
-        min_p = 0.1,
-        top_p = 0.95,
-        top_k = -1,
-        seed = 3407,
-        stop = [tokenizer.eos_token],
-        include_stop_str_in_output = True,
-    )
-
     num_train_epochs = args.epochs
     save_name = f"grpo_v4_{model_name.split('/')[-1]}_{args.save_name}"
 
@@ -144,17 +138,21 @@ def main():
     )
 
     training_args = GRPOConfig(
-        vllm_sampling_params = vllm_sampling_params,
-        temperature = args.temperature,
-        learning_rate = 1e-5,
-        weight_decay = 0.01,
+        # use_vllm=True,
+        # cache_implementation=False,
+        # vllm_mode="colocate",
+        # vllm_tensor_parallel_size=4,
+        # vllm_gpu_memory_utilization=0.4,
+
+        learning_rate = 1e-5,       # Defualt : 5e-6 
+        # weight_decay = 0.01,
         warmup_ratio = 0.05,
+        temperature = args.temperature, # Default : 1.0
         lr_scheduler_type = "cosine",
-        optim = "adamw_8bit",
+        # optim = "adamw_8bit",
         logging_steps = 1,
-        repetition_penalty = 1.05,
-        per_device_train_batch_size = 4,
-        gradient_accumulation_steps = 4,
+        per_device_train_batch_size = 1,
+        gradient_accumulation_steps = 16,
         num_generations = 16, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
@@ -165,12 +163,16 @@ def main():
         log_completions = True,
         mask_truncated_completions = True,
         shuffle_dataset = False,
-        # For optional training + evaluation
-        # fp16_full_eval = True,
-        # per_device_eval_batch_size = 4,
-        # eval_accumulation_steps = 1,
-        # eval_strategy = "steps",
-        # eval_steps = 1,
+        generation_kwargs={
+            'temperature': args.temperature,
+            "top_p": 0.95,
+            # "top_k": -1,
+            "min_p": 0.1,
+            "seed": 3407,
+            "repetition_penalty" : 1.05,
+            "stop": [tokenizer.eos_token],
+            "include_stop_str_in_output": True,
+        },
     )
     print(f"dataset:\n{dataset}")
     print(dataset[0]['prompt'][0]['content'])
@@ -183,6 +185,7 @@ def main():
         reward_funcs = [
             match_format_exactly,
             check_answer,
+            penalize_english_overuse
         ],
         args = training_args,
         train_dataset = dataset,

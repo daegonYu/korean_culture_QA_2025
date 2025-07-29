@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--use_train", action="store_true", help="Use train set instead of dev set")
     parser.add_argument("--use_test", action="store_true", help="Use test set instead of dev set")
     parser.add_argument("--use_lora", action="store_true", default=False, help="Use LoRA layers")
+    parser.add_argument("--max_lora_rank", type=int, default=64, help="Max LoRA rank (default: 64)")
     parser.add_argument("--use_wandb", action="store_true", default=False, help="Use WANDB")
     parser.add_argument("--system_prompt", type=str, default="당신은 한국 문화 전문가입니다. 질문에 답하세요.")
     parser.add_argument("--user_prompt", type=str, required=True)
@@ -25,9 +26,6 @@ def main():
     
     print(f"🚀 Phase 1 실험 시작")
     print(f"   모델: {args.model}")
-    print(f"   데이터: {args.data_path}")
-    print(f"   샘플 수: {args.sample_size or 'All'}")
-    print(f"   데이터셋: {'Train' if args.use_train else 'Dev'}")
     print("="*60)
     
     # 실험 초기화
@@ -37,6 +35,7 @@ def main():
         user_prompt=args.user_prompt,
         answer_tag=args.answer_tag,
         use_lora=args.use_lora,
+        max_lora_rank=args.max_lora_rank if args.use_lora else None,  
         use_wandb=args.use_wandb
     )
     experiment.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

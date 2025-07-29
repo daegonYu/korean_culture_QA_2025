@@ -2,7 +2,7 @@ from __init__ import *
 
 class PromptingExperiment:
     def __init__(self, model_name="beomi/Kanana-8B", load_model=True, use_lora=False, use_wandb=False, \
-                system_prompt="", user_prompt="", answer_tag="<answer>"):
+                system_prompt="", user_prompt="", answer_tag="정답:", max_lora_rank=64):
         """
         Phase 1: 프롬프팅 실험
         5가지 다른 프롬프트로 Kanana 8B 성능 테스트
@@ -14,7 +14,7 @@ class PromptingExperiment:
         self.answer_tag = answer_tag
         self.use_lora = use_lora
         self.use_wandb = use_wandb
-
+        self.max_lora_rank = max_lora_rank
         # wandb 초기화
         if self.use_wandb:
             load_dotenv()
@@ -38,13 +38,14 @@ class PromptingExperiment:
 
         self.llm = None
         self.lora_req = None
+        max_model_len=800
         if load_model and not self.use_lora:
             print(f"Loading {self.model_name}...")
             self.llm = LLM(
                 model=self.model_name,
                 dtype="bfloat16",     # 또는 "float16", "auto"
                 trust_remote_code=True,
-                max_model_len=1024,   # 최대 입력 길이
+                max_model_len=max_model_len,   # 최대 입력 길이
                 gpu_memory_utilization=0.9,  # GPU 메모리 사용률
             )
         elif load_model and self.use_lora:
@@ -55,15 +56,16 @@ class PromptingExperiment:
                 model=base_model_name,
                 dtype="bfloat16",     # 또는 "float16", "auto"
                 trust_remote_code=True,
-                max_model_len=1024,   # 최대 입력 길이
+                max_model_len=max_model_len,   # 최대 입력 길이
                 gpu_memory_utilization=0.9,  # GPU 메모리 사용률
                 enable_lora=self.use_lora,
+                max_lora_rank=self.max_lora_rank
             )
             self.lora_req = LoRARequest("adapter", 1, self.model_name)
 
         # Sampling 파라미터 설정 (모델 로드 여부와 상관없이 준비)
         self.sampling_params = SamplingParams(
-            max_tokens=2048,
+            max_tokens=max_model_len,
             temperature=0.6,
             top_p=0.95
         )
@@ -101,6 +103,7 @@ class PromptingExperiment:
             question_type=question_type,
             question=question
         )
+        print(f"user_prompt:{user_prompt}")
 
 
         # 0. System prompt: 전문가 역할 부여
@@ -194,7 +197,7 @@ class PromptingExperiment:
         
         return prompts
     
-    def generate_answer(self, prompt, max_length=512):
+    def generate_answer(self, prompt):
         """모델로 답변 생성"""
         try:
             messages = [
@@ -231,7 +234,7 @@ class PromptingExperiment:
 
             # if '\n' in answer:
             #     answer = answer.split('\n')[0].strip()
-                
+            print(answer)
             return answer
             
         except Exception as e:
@@ -470,9 +473,13 @@ class PromptingExperiment:
                     name = key[:-5]  # 'rich_pred' -> 'rich'
 
                     original_answer = pred_answer
-                    if self.answer_tag != '' and self.answer_tag in pred_answer:
-                        pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
+                    if '<answer>' in pred_answer:
+                        answer_tag = '<answer>'
+                    else:
+                        answer_tag = '정답:'
+                    pred_answer = pred_answer.split(answer_tag)[-1].strip()
                     pred_answer = pred_answer.replace('*', '').replace('</answer>','')
+
                     if rec['true_answer'] is None:
                         print('# 불량')
                         print(rec)

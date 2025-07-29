@@ -3,7 +3,7 @@ from phase1_prompting_experiment import PromptingExperiment
 
 def file_merge(json_path):
 
-    df= pd.read_csv('data/preprocessed/test_with_answers_no_websearch.csv')
+    df= pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/test_with_answers.csv')
 
     # JSON 파일 열기
     with open(json_path, 'r', encoding='utf-8') as f:
