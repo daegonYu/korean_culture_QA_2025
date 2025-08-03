@@ -2,7 +2,7 @@
 
 이 레포지토리는 \*\*국립국어원 AI 말평(한국어 능력 평가)\*\*의 *한국문화 질의응답* 과제를 해결하기 위해 **2-단계 파이프라인(프롬프트 엔지니어링 →  GRPO 강화학습)** 을 구현한 토털 코드베이스입니다. 
 
-**맞춤형 Reward Model** 및 **커리큘럼 샘플링** 기법까지 포함합니다. 
+**맞춤형 Reward Model** 및 **커리큘럼 데이터 샘플링** 기법까지 포함합니다. 
 *설치 → 데이터 → 훈련 → 평가 → 추론* 과정
 
 ---
@@ -43,8 +43,9 @@ bash install.sh      # CUDA 12.x + PyTorch 2.3 기준
 
 | 단계                             | 스크립트               | 주요 기술                                                                     | 출력               |
 | ------------------------------ | ------------------ | ------------------------------------------------------------------------- | ---------------- |
-| **Phase 1** Prompt Engineering | `run_phase1.py`    | Zero/CoT/Choice-Shuffle 프롬프트 실험                                           | 초기 베이스라인         |
-~~| **Phase 2** SFT                | `phase2_sft.py`    | **LoRA-8**(뒤 1/3 Attention Q,V), 16-bit, AdamW                            | SFT Adapter      |~~
-| **Phase 3** RL                 | `phase3_grpo_*.py` | **GRPO**| 최종 RL checkpoint |
+| **Phase 1** Prompt Engineering | `run_phase1.py`    | 다양한 프롬프트 전략을 Kanana 1.5 8B 등 모델에 적용하여 최적 프롬프트를 탐색                                           | 초기 베이스라인         |
+| **Phase 2** SFT                | `phase2_sft.py`    | Phase 1에서 수집한 고품질 응답을 감독학습(SFT)으로 미세조정                            | SFT Adapter      |
+| **Phase 3** RL                 | `phase3_grpo_*.py`, `phase3_grpo_6_fsdp.py` | 그룹 상대 정책 최적화(GRPO) 학습, FSDP 버전 포함 | 최종 RL checkpoint |
 
 **Phase 3** RL은 선다형과 단단형에 적용
+(**Phase 2** SFT은 서술형에 적용할 예정이었으나 생략됨)
