@@ -32,11 +32,6 @@ def main():
 
     args = parser.parse_args()
 
-    # match_format = re.compile(
-    #     # rf"{args.solution_start}(.+?)$", re.DOTALL
-    #     rf"{args.solution_start}(.+)"       # 태그 라인만 체크
-    #     )
-
     max_seq_length = 3096 # Can increase for longer reasoning traces
     lora_rank = args.lora_rank # Larger rank = smarter, but slower
     lora_alpha = args.lora_alpha # Larger rank = smarter, but slower
@@ -96,15 +91,12 @@ def main():
         "answer": x["answer"]
     })
 
-    # 확인
     print("Dataset loaded and formatted.")
     print(dataset[0])
 
 
     match_format = re.compile(
         rf"{args.solution_start}(.+?)$", re.DOTALL)
-
-    # match_format = re.compile(rf".{5,}{args.solution_start}(.*?)$", re.DOTALL)
 
     tokenized = dataset.map(
         lambda x: {"tokens" : tokenizer.apply_chat_template(x["prompt"], add_generation_prompt = True, tokenize = True)},
@@ -116,7 +108,6 @@ def main():
     maximum_length = int(np.quantile(tokenized["L"], 1.0))
     print("Max Length = ", maximum_length)
 
-    # Filter only samples smaller than 90% max length
     dataset = dataset.select(np.where(np.array(tokenized["L"]) <= maximum_length)[0])
     del tokenized
     max_prompt_length = maximum_length + 1 # + 1 just in case!

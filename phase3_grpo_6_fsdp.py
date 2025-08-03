@@ -23,8 +23,7 @@ def main():
     parser.add_argument("--model", default="kakaocorp/kanana-1.5-8b-instruct-2505", help="Model name to use")
     parser.add_argument("--prompt_template", required=True, help="Prompt template to use")
     parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
-    parser.add_argument("--lora_rank", default=8, type=int, help="LoRA rank")
-    parser.add_argument("--lora_alpha", default=8, type=int, help="LoRA alpha")
+    parser.add_argument("--vllm_gpu_memory_utilization", default=0.6, type=float, help="vllm_gpu_memory_utilization")
     parser.add_argument("--epochs", default=5, type=int, help="epochs")
     parser.add_argument("--system_prompt", default='', type=str, help="system_prompt")
     parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
@@ -33,14 +32,7 @@ def main():
 
     args = parser.parse_args()
 
-    # match_format = re.compile(
-    #     # rf"{args.solution_start}(.+?)$", re.DOTALL
-    #     rf"{args.solution_start}(.+)"       # 태그 라인만 체크
-    #     )
-
     max_seq_length = 3096 # Can increase for longer reasoning traces
-    lora_rank = args.lora_rank # Larger rank = smarter, but slower
-    lora_alpha = args.lora_alpha # Larger rank = smarter, but slower
 
     model_name = args.model
 
@@ -53,19 +45,6 @@ def main():
         use_fast=True,
         trust_remote_code=True
     )
-
-    # lora_config = LoraConfig(
-    #     r=args.lora_rank,
-    #     lora_alpha=args.lora_alpha,
-    #     # target_modules=[
-    #     #     "q_proj", "k_proj", "v_proj", "o_proj",
-    #     #     "gate_proj", "up_proj", "down_proj"
-    #     # ],
-    #     target_modules = 'all-linear',  # Use all linear layers
-    #     bias="none",
-    #     task_type="CAUSAL_LM",
-    # )
-    # model = get_peft_model(model, lora_config)
 
     training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
@@ -104,7 +83,6 @@ def main():
     print("Dataset loaded and formatted.")
     print(dataset[0])
 
-    # match_format = re.compile(rf".{5,}{args.solution_start}(.*?)$", re.DOTALL)
 
     tokenized = dataset.map(
         lambda x: {"tokens" : tokenizer.apply_chat_template(x["prompt"], add_generation_prompt = True, tokenize = True)},
@@ -116,14 +94,13 @@ def main():
     maximum_length = int(np.quantile(tokenized["L"], 1.0))
     print("Max Length = ", maximum_length)
 
-    # Filter only samples smaller than 90% max length
     dataset = dataset.select(np.where(np.array(tokenized["L"]) <= maximum_length)[0])
     del tokenized
     max_prompt_length = maximum_length + 1 # + 1 just in case!
     max_completion_length = max_seq_length - max_prompt_length
 
     num_train_epochs = args.epochs
-    save_name = f"grpo_v4_{model_name.split('/')[-1]}_{args.save_name}"
+    save_name = f"grpo_v6_{model_name.split('/')[-1]}_{args.save_name}"
 
     # ✅ wandb 초기화
     # .env 파일 로드
@@ -138,13 +115,12 @@ def main():
     )
 
     training_args = GRPOConfig(
-        # use_vllm=True,
-        # cache_implementation=False,
-        # vllm_mode="colocate",
-        # vllm_tensor_parallel_size=4,
-        # vllm_gpu_memory_utilization=0.4,
-
-        learning_rate = 1e-5,       # Defualt : 5e-6 
+        use_vllm=True,
+        cache_implementation=False,
+        vllm_mode="colocate",
+        vllm_tensor_parallel_size=4,
+        vllm_gpu_memory_utilization=args.vllm_gpu_memory_utilization,
+        learning_rate = 1e-6,       # Defualt : 5e-6 
         # weight_decay = 0.01,
         warmup_ratio = 0.05,
         temperature = args.temperature, # Default : 1.0
@@ -152,17 +128,17 @@ def main():
         # optim = "adamw_8bit",
         logging_steps = 1,
         per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 16,
-        num_generations = 16, # Decrease if out of memory
+        gradient_accumulation_steps = 4,
+        num_generations = 8, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
-        save_steps = 0.49 / num_train_epochs,
+        save_steps = 0.33,
         report_to = "wandb", # Can use Weights & Biases
         output_dir = f"models/{save_name}",
         log_completions = True,
         mask_truncated_completions = True,
-        shuffle_dataset = False,
+        shuffle_dataset = True,
         generation_kwargs={
             'temperature': args.temperature,
             "top_p": 0.95,

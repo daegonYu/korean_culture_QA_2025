@@ -16,11 +16,13 @@ def main():
     parser.add_argument("--use_train", action="store_true", help="Use train set instead of dev set")
     parser.add_argument("--use_test", action="store_true", help="Use test set instead of dev set")
     parser.add_argument("--use_lora", action="store_true", default=False, help="Use LoRA layers")
-    parser.add_argument("--max_lora_rank", type=int, default=64, help="Max LoRA rank (default: 64)")
     parser.add_argument("--use_wandb", action="store_true", default=False, help="Use WANDB")
+    parser.add_argument("--max_lora_rank", type=int, default=64, help="Max LoRA rank (default: 64)")
     parser.add_argument("--system_prompt", type=str, default="당신은 한국 문화 전문가입니다. 질문에 답하세요.")
     parser.add_argument("--user_prompt", type=str, required=True)
-    parser.add_argument("--answer_tag", type=str, default="<answer>")
+    parser.add_argument("--system_prompt2", type=str, required=False, type=str, default=None, help="(Optional) Separate system prompt for descriptive (서술형) question type")
+    parser.add_argument("--user_prompt2", type=str, required=False, type=str, default=None, help="(Optional) Separate user prompt for descriptive (서술형) question type")
+    parser.add_argument("--answer_tag", type=str, default="정답:")
 
     args = parser.parse_args()
     
@@ -28,11 +30,18 @@ def main():
     print(f"   모델: {args.model}")
     print("="*60)
     
-    # 실험 초기화
+    if args.system_prompt2 is None:
+        args.system_prompt2 = args.system_prompt
+
+    if args.user_prompt2 is None:
+        args.user_prompt2 = args.user_prompt
+
     experiment = PromptingExperiment(
         model_name=args.model,
         system_prompt=args.system_prompt,
+        system_prompt2=args.system_prompt2,
         user_prompt=args.user_prompt,
+        user_prompt2=args.user_prompt2,
         answer_tag=args.answer_tag,
         use_lora=args.use_lora,
         max_lora_rank=args.max_lora_rank if args.use_lora else None,  

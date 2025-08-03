@@ -32,9 +32,7 @@ def main():
 
     model_name = args.model
     model, tokenizer = FastLanguageModel.from_pretrained(
-        # model_name = "kakaocorp/kanana-1.5-8b-instruct-2505",
         model_name = model_name, # Use Qwen3-4B-Base for 4B model
-        # model_name = 'skt/A.X-4.0-Light',
         max_seq_length = max_seq_length,
         load_in_4bit = False, # False for LoRA 16bit
         fast_inference = True, # Enable vLLM fast inference
@@ -53,35 +51,6 @@ def main():
         use_gradient_checkpointing = "unsloth", # Reduces memory usage
         random_state = 3407,
     )
-
-
-    # reasoning_start = "<think>" # Acts as <think>
-    # reasoning_end   = "</think>"   # Acts as </think>
-    # solution_start  = "<answer>"
-    # solution_end    = "</answer>"
-
-#     system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-
-# 사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
-# - 질문 유형(question_type): '선다형', '단답형'
-# 선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
-# 단답형 문제의 경우, 단어 (구)로 작성하십시오.
-
-# - 답변 형식
-# 당신은 사용자의 질문에 대해 먼저 머릿속으로 사고 과정을 거친 뒤, 그 과정을 설명하고 최종 답변을 제공합니다.  
-# 사고 과정은 `<think>...</think>` 태그 안에, 최종적인 답변은 `<answer>...</answer>` 태그 안에 작성하세요."""
-
-# 그 다음 실험
-#     system_prompt = """한국의 문화에 기반하여 질문에 정확한 답변을 하십시오.
-
-# 사용자가 입력한 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오.
-# - 질문 유형(question_type): '선다형', '단답형'
-# 선다형 문제의 경우, 가장 정답과 가까운 번호를 선택하십시오.
-# 단답형 문제의 경우, 단어 (구)로 작성하십시오.
-
-# - 답변 형식
-# step by step으로 문제를 풀기 위한 단계적인 사고 후 최종 답변은 `<answer></answer>` 태그 안에 작성하세요."""
-
 
     training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
@@ -106,14 +75,8 @@ def main():
         "answer": x["answer"]
     })
 
-    # 확인
     print("Dataset loaded and formatted.")
     print(dataset[0])
-    ### 마지막에 /answer tag가 있어야 통과
-
-    # Add optional EOS token matching
-    # solution_end_regex = r"</answer>[\s]{0,}" + \
-    #     "(?:" + re.escape(tokenizer.eos_token) + ")?"
 
     match_format = re.compile(
         # rf"{reasoning_end}(.+?)"\
@@ -121,15 +84,7 @@ def main():
         rf"[\s]{{0,}}$",
         flags = re.DOTALL
     )
-    # match_format.findall(
-    #     "Let me think!</think>"\
-    #     f"<answer>\n2\n</answer>",
-    # )
-    # match_format.findall(
-    #     # "Let me think!</think>"\
-    #     f"<answer>\n2\n</answer>",
-    # )
-    ### 마지막에 /answer tag가 있어야 통과 -> +1
+
     def match_format_exactly(completions, **kwargs):
         scores = []
         for completion in completions:

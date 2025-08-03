@@ -5,6 +5,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Curriculum Sampling for Korean Culture QA")
     parser.add_argument("--model", required=True, type=str, help="Model name to use")
+    parser.add_argument("--training_data_path", required=False, type=str, default='data/preprocessed/grpo_train_excluded_서술형.csv', help="training_data_path")
     parser.add_argument("--save_path", required=True, type=str, help="save_path")
     parser.add_argument("--system_prompt", required=True, type=str, help="system_prompt")
     parser.add_argument("--user_prompt", required=True, type=str, help="user_prompt")
@@ -51,8 +52,7 @@ def main():
     system_prompt = args.system_prompt
     user_prompt = args.user_prompt
 
-    training_df = pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형.csv')
-    training_df
+    training_df = pd.read_csv(args.training_data_path)
     results = []
     for idx, row in training_df.iterrows():
         messages = [

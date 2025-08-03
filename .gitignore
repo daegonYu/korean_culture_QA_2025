@@ -6,12 +6,9 @@
 /wandb
 /logs
 /results
-/data
 wandb.sh
 *.log
-*.ipynb
 *.out
 *.json
-*.csv
 .env
-openai_api.py
+ex.ipynb

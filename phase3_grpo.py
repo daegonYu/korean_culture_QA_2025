@@ -17,9 +17,7 @@ def main():
 
     model_name = args.model
     model, tokenizer = FastLanguageModel.from_pretrained(
-        # model_name = "kakaocorp/kanana-1.5-8b-instruct-2505",
         model_name = model_name, # Use Qwen3-4B-Base for 4B model
-        # model_name = 'skt/A.X-4.0-Light',
         max_seq_length = max_seq_length,
         load_in_4bit = False, # False for LoRA 16bit
         fast_inference = True, # Enable vLLM fast inference
@@ -97,14 +95,8 @@ def main():
         "answer": x["answer"]
     })
 
-    # 확인
     print(dataset[0])
-    ### 마지막에 /answer tag가 있어야 통과
     import re
-
-    # Add optional EOS token matching
-    # solution_end_regex = r"</answer>[\s]{0,}" + \
-    #     "(?:" + re.escape(tokenizer.eos_token) + ")?"
 
     match_format = re.compile(
         # rf"{reasoning_end}.*?"\
@@ -112,15 +104,7 @@ def main():
         rf"[\s]{{0,}}$",
         flags = re.DOTALL
     )
-    # match_format.findall(
-    #     "Let me think!</think>"\
-    #     f"<answer>\n2\n</answer>",
-    # )
-    # match_format.findall(
-    #     # "Let me think!</think>"\
-    #     f"<answer>\n2\n</answer>",
-    # )
-    ### 마지막에 /answer tag가 있어야 통과 -> +1
+
     def match_format_exactly(completions, **kwargs):
         scores = []
         for completion in completions:

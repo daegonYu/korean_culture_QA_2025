@@ -2,7 +2,7 @@ from __init__ import *
 
 class PromptingExperiment:
     def __init__(self, model_name="beomi/Kanana-8B", load_model=True, use_lora=False, use_wandb=False, \
-                system_prompt="", user_prompt="", answer_tag="정답:", max_lora_rank=64):
+                system_prompt="", system_prompt2="", user_prompt="", user_prompt2="", answer_tag="정답:", max_lora_rank=64):
         """
         Phase 1: 프롬프팅 실험
         5가지 다른 프롬프트로 Kanana 8B 성능 테스트
@@ -10,7 +10,9 @@ class PromptingExperiment:
 
         self.model_name = model_name
         self.system_prompt = system_prompt
+        self.system_prompt2 = system_prompt2        # 서술형 유형에 대한 시스템 프롬프트 (서술형의 경우 따로 프롬프팅)
         self.user_prompt = user_prompt
+        self.user_prompt2 = user_prompt2            # 서술형 유형에 대한 유저 프롬프트
         self.answer_tag = answer_tag
         self.use_lora = use_lora
         self.use_wandb = use_wandb
@@ -30,7 +32,9 @@ class PromptingExperiment:
                     "load_model": load_model,
                     "use_lora": self.use_lora,
                     "system_prompt": system_prompt,
+                    "system_prompt_서술형": system_prompt2,
                     "user_prompt_template": user_prompt,
+                    "user_prompt_template_서술형": user_prompt2,
                     "answer_tag": answer_tag
                 }
             )
@@ -38,7 +42,7 @@ class PromptingExperiment:
 
         self.llm = None
         self.lora_req = None
-        max_model_len=800
+        max_model_len=3096
         if load_model and not self.use_lora:
             print(f"Loading {self.model_name}...")
             self.llm = LLM(
@@ -65,9 +69,11 @@ class PromptingExperiment:
 
         # Sampling 파라미터 설정 (모델 로드 여부와 상관없이 준비)
         self.sampling_params = SamplingParams(
-            max_tokens=max_model_len,
+            max_tokens=2000,
             temperature=0.6,
-            top_p=0.95
+            top_p=0.95,
+            # best_of=8,
+            # n=1
         )
                 
     def load_data(self, data_path="data"):
@@ -94,104 +100,28 @@ class PromptingExperiment:
         
         prompts = {}
 
-        system_prompt = self.system_prompt
-        user_prompt = self.user_prompt
-        user_prompt = user_prompt.format(
-            category=category,
-            domain=domain,
-            topic_keyword=topic_keyword,
-            question_type=question_type,
-            question=question
-        )
+        if question_type != '서술형':
+            system_prompt = self.system_prompt
+            user_prompt = self.user_prompt
+            user_prompt = user_prompt.format(
+                category=category,
+                domain=domain,
+                topic_keyword=topic_keyword,
+                question_type=question_type,
+                question=question
+            )
+        else:
+            system_prompt = self.system_prompt2
+            user_prompt = self.user_prompt2
+            user_prompt = user_prompt.format(
+                category=category,
+                domain=domain,
+                topic_keyword=topic_keyword,
+                question_type=question_type,
+                question=question
+            )
+        print(f"system_prompt:{system_prompt}")    
         print(f"user_prompt:{user_prompt}")
-
-
-        # 0. System prompt: 전문가 역할 부여
-#         system_prompt = """당신은 한국 문화 전문가입니다. 다음 질문에 정확하고 적절하게 답변해주세요.
-# 당신의 답변은 다음과 같은 형식을 따라야 합니다:
-# 1. **선다형 (Multiple Choice)**  
-#    - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
-
-# 2. **단답형 (Short Answer)**  
-#    - 5어절 이내의 **명사 또는 구**로 답하십시오.  
-
-# 3. **서술형 (Descriptive Answer)**  
-#    - 500자 이내의 문장으로 설명하십시오."""
-
-#         detailed_system_prompt = """당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
-
-# 사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-# - 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
-# - 주제(topic_keyword): 문제의 핵심 키워드
-# - 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
-# - 질문 내용(question): 사용자가 직접 묻는 질문
-
-# 당신의 답변은 다음과 같은 형식을 따라야 합니다:
-# 1. **선다형 (Multiple Choice)**  
-#    - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
-
-# 2. **단답형 (Short Answer)**  
-#    - 5어절 이내의 **명사 또는 구**로 답하십시오.  
-
-# 3. **서술형 (Descriptive Answer)**  
-#    - 500자 이내의 문장으로 설명하십시오."""
-
-        # reasoning_start = "<think>" 
-        # reasoning_end   = "</think>"
-        # solution_start  = "<answer>"
-        # solution_end    = "</answer>"
-
-#         grpo_v1_system_prompt = f"""당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
-
-# 사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-# - 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
-# - 주제(topic_keyword): 문제의 핵심 키워드
-# - 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
-# - 질문 내용(question): 사용자가 직접 묻는 질문
-
-# 답변은 다음과 같은 형식을 따라야 합니다:
-# 1. **선다형 (Multiple Choice)**  
-# - 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
-
-# 2. **단답형 (Short Answer)**  
-# - 5어절 이내의 **명사 또는 구**로 답하십시오.  
-
-# 3. **서술형 (Descriptive Answer)**  
-# - 500자 이내의 문장으로 설명하십시오.
-
-# 문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
-# {reasoning_start}
-# 문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.
-
-# 최종 정답은 다음 형식으로 작성하십시오:
-# {solution_start}
-# 위 작성된 내용을 토대로 최종 정답만을 출력합니다."""
-
-        # 1. Baseline: question만
-        # prompts['baseline'] = {"system_prompt":system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n질문: {question}\n답변:"}
-        
-        # 2. Simple: question_type + question
-        # prompts['simple'] = {"system_prompt":system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n<{question_type}>\n<질문>\n{question}\n답변:"}
-        
-        # 3. Rich: 모든 메타데이터 포함
-        # prompts['rich'] = {"system_prompt":system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\n분류: {category}\n도메인: {domain}\n주제: {topic_keyword}\n답변 유형: {question_type}\n\n<질문>\n{question}\n\n답변:"}
-
-        # 4. Expert: 전문가 역할 부여
-        # prompts['expert'] = {"system_prompt":system_prompt, "user_prompt":f"당신은 한국 문화 전문가입니다. 다음 질문에 정확하고 적절하게 답변해주세요.\n질문: {question}\n답변:"}
-
-        # 5. Format-aware: 답변 형식 명시
-        # if question_type == "선다형":
-        #     format_instruction = "보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오."
-        # elif question_type == "단답형":
-        #     format_instruction = "5어절 이내의 **명사 또는 구**로 답하십시오."
-        # else:  # 서술형
-        #     format_instruction = "500자 이내의 문장으로 설명하십시오."
-
-        # prompts['format_aware'] = {"system_prompt":system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\n<{question_type}>\n{format_instruction}\n\n<질문>\n{question}\n\n답변:"}
-
-        # prompts['detailed'] = {"system_prompt":detailed_system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n<질문>\n{question}\n\n답변:"}
-
-        # prompts['grpo_v1'] = {"system_prompt":grpo_v1_system_prompt, "user_prompt":f"주어진 질문에 적절한 답변을 해주세요.\n\ncategory: {category}\ndomain: {domain}\ntopic_keyword: {topic_keyword}\nquestion_type: {question_type}\n\n<질문>\n{question}\n\n답변:"}
 
         prompts['experiment'] = {"system_prompt":system_prompt, "user_prompt": user_prompt}
         
@@ -232,8 +162,6 @@ class PromptingExperiment:
                     answer
                 )
 
-            # if '\n' in answer:
-            #     answer = answer.split('\n')[0].strip()
             print(answer)
             return answer
             
@@ -337,26 +265,6 @@ class PromptingExperiment:
         return sum(stacked_bleu) / len(stacked_bleu) if stacked_bleu else 0.0
 
 
-    # def calc_bertscore(self, true, pred):
-    #     import evaluate
-    #     bert_scorer = evaluate.load('bertscore')
-    #     scores = bert_scorer.compute(
-    #         predictions=pred,
-    #         references=true,
-    #         model_type='bert-base-multilingual-cased',
-    #         lang='ko',
-    #         batch_size=1,
-    #     )
-    #     return sum(scores['f1']) / len(scores['f1'])
-
-    # def calc_bleurt(self, true, pred):
-    #     from bleurt import score
-    #     scorer = score.BleurtScorer('/workspace/korean_culture_QA_2025/bleurt/BLEURT-20')
-    #     # BLEURT expects flat lists of strings
-    #     flat_true = [t if isinstance(t, str) else t[0] for t in true]
-    #     scores = scorer.score(references=flat_true, candidates=pred, batch_size=64)
-    #     return sum(scores) / len(scores)
-
     def run_experiment(self, data, sample_size=None, save_results=True, test_mode=False):
         """실험 실행"""
         if sample_size:
@@ -394,7 +302,6 @@ class PromptingExperiment:
                 if self.answer_tag != '' and self.answer_tag in pred_answer:
                     pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
                 pred_answer = pred_answer.replace('*', '').replace('</answer>','')
-
                 
                 # 질문 유형별 평가
                 if question_type == "선다형":
@@ -404,7 +311,6 @@ class PromptingExperiment:
                 elif question_type == "단답형":
                     exact = self.evaluate_short_answer(pred_answer, true_answer)
                     sample_results[f'{prompt_name}_exact'] = exact
-                    # sample_results[f'{prompt_name}_partial'] = partial
                     
                 else:  # 서술형
                     # 1) Rouge
@@ -416,20 +322,6 @@ class PromptingExperiment:
                     # 2) BLEU
                     bleu_score = self.calc_BLEU(original_answer, true_answer)
                     sample_results[f'{prompt_name}_bleu'] = bleu_score
-
-                    # 3) BERTScore 
-                    # bertscore = self.calc_bertscore(
-                    #     [true_answer],
-                    #     [pred_answer],
-                    # )
-                    # sample_results[f'{prompt_name}_bertscore'] = bertscore
-
-                    # 4) BLEURT
-                    # bleurt_score = self.calc_bleurt(
-                    #     [true_answer],
-                    #     [pred_answer],
-                    # )
-                    # sample_results[f'{prompt_name}_bleurt'] = bleurt_score
             
             results[question_type].append(sample_results)
             
@@ -518,7 +410,6 @@ class PromptingExperiment:
             type_data = results[question_type]
             analysis[question_type] = {}
             
-            # for prompt_name in ['baseline', 'simple', 'rich', 'expert', 'format_aware', 'detailed']:
             for prompt_name in ['_'.join(x.split('_')[:-1]) for x in type_data[0].keys() if x.endswith('_pred')]:
                 if question_type == "선다형":
                     print(type_data[0].keys())
@@ -530,10 +421,8 @@ class PromptingExperiment:
                     
                 elif question_type == "단답형":
                     exact_scores = [item[f'{prompt_name}_exact'] for item in type_data]
-                    # partial_scores = [item[f'{prompt_name}_partial'] for item in type_data]
                     analysis[question_type][prompt_name] = {
                         'exact_match': np.mean(exact_scores),
-                        # 'partial_match': np.mean(partial_scores),
                         'count': len(exact_scores)
                     }
                     
@@ -542,15 +431,11 @@ class PromptingExperiment:
                     rouge2_scores = [item[f'{prompt_name}_rouge2'] for item in type_data]
                     rougeL_scores = [item[f'{prompt_name}_rougeL'] for item in type_data]
                     bleu_scores     = [item[f'{prompt_name}_bleu']      for item in type_data]
-                    # bert_scores     = [item[f'{prompt_name}_bertscore'] for item in type_data]
-                    # bleurt_scores   = [item[f'{prompt_name}_bleurt']   for item in type_data]
                     analysis[question_type][prompt_name] = {
                         'rouge1': np.mean(rouge1_scores),
                         'rouge2': np.mean(rouge2_scores),
                         'rougeL': np.mean(rougeL_scores),
                         'bleu': np.mean(bleu_scores),
-                        # 'bertscore': np.mean(bert_scores),
-                        # 'bleurt': np.mean(bleurt_scores),
                         'count': len(rouge1_scores)
                     }
         

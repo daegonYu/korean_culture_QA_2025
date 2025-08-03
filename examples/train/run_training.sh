@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+
 system_prompt="당신은 한국의 문화와 관련된 문제를 전문적으로 풀이해주는 문제 해설가입니다.  
 사용자가 입력한 문제에 대해 단계별로 차근차근(step by step) 설명하여 **문제 해설**과 **정답**을 제시하세요.  
 
@@ -24,22 +25,28 @@ user_prompt="아래 문제를 단계별로 자세히 해설해주고, 마지막�
 answer_tag="정답:"
 
 
+nohup accelerate launch --config_file accelerate/fsdp_config.yaml phase3_grpo_6_fsdp.py \
+  --model "skt/A.X-4.0-Light" \
+  --temperature 1.1 \
+  --epochs 15 \
+  --system_prompt "$system_prompt" \
+  --prompt_template "$user_prompt" \
+  --solution_start "$answer_tag" \
+  --data_path "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_skt_curriculum.csv" \
+  --save_name "curri_선다형_단답형_v1_prompt2_FFT" \
+  --vllm_gpu_memory_utilization 0.6
+
+
 paths=(
-    "/workspace/korean_culture_QA_2025/models/grpo_v4_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v4_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_A.X-4.0-Light_curri_선다형_단답형_v2_prompt2_v2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v4_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2"
-    "/workspace/korean_culture_QA_2025/models/grpo_v5_Midm-2.0-Base-Instruct_curri_선다형_단답형_v2_prompt2"
+    "/workspace/korean_culture_QA_2025/models/grpo_v6_A.X-4.0-Light_curri_선다형_단답형_v1_prompt2_FFT"
 )
+
 for path in "${paths[@]}"; do
     echo "🔍 상위 경로: $path"
     find "$path" -mindepth 1 -type d | while read -r model; do
         echo "🔍 현재 경로: $model"
-        nohup python run_phase1.py --model "$model" --use_test --use_wandb --use_lora \
-        --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" --max_lora_rank 64
+        nohup python run_phase1.py --model "$model" --use_test --use_wandb \
+        --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag"
 
         dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
         checkpoint=$(basename "$model")            # "checkpoint-112"
