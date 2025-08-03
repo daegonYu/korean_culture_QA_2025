@@ -12,3 +12,4 @@ wandb.sh
 *.json
 .env
 ex.ipynb
+openai_api.ipynb
