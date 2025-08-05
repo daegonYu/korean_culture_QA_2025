@@ -1,18 +1,29 @@
-# !pip install unsloth unsloth_zoo
-from unsloth import FastLanguageModel
-import torch
 import argparse
-from rouge_metric import Rouge
 import json
-from dotenv import load_dotenv
 import os
-import wandb
-from trl import GRPOConfig, GRPOTrainer
-import pandas as pd
-from datasets import Dataset
 import re
+import warnings
+from pathlib import Path
+
 import numpy as np
-from vllm import SamplingParams
+import pandas as pd
+import torch
+from datasets import Dataset
+from dotenv import load_dotenv
+from peft import PeftConfig
+from rouge_score import rouge_scorer
+from sklearn.metrics import accuracy_score, f1_score
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import GRPOConfig, GRPOTrainer
+from unsloth import FastLanguageModel
+from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
+import wandb
+
+
+warnings.filterwarnings('ignore')
+load_dotenv()
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 3: GRPO Experiment")
@@ -27,7 +38,7 @@ def main():
 
     args = parser.parse_args()
 
-    max_seq_length = 2048 # Can increase for longer reasoning traces
+    max_seq_length = 1000 # Can increase for longer reasoning traces
     lora_rank = args.lora_rank # Larger rank = smarter, but slower
 
     model_name = args.model
@@ -55,6 +66,7 @@ def main():
     training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
     training_df['question'] = training_df['question'].astype(str).str.strip()
+
     training_df["prompt"] = training_df.apply(lambda row: (
         f"주어진 질문에 적절한 답변을 해주세요.\n\n"
         f"카테고리: {row['category']}\n"
@@ -78,10 +90,8 @@ def main():
     print("Dataset loaded and formatted.")
     print(dataset[0])
 
-
     match_format = re.compile(
         rf"{args.solution_start}(.+?)$", re.DOTALL)
-
 
     def match_format_exactly(completions, **kwargs):
         scores = []
@@ -110,21 +120,15 @@ def main():
         return 0.0
 
     def evaluate_long_answer(pred_answer: str, true_answer: str) -> float:
-        """서술형: rouge-1 F1 score 만 반환"""
-        rouge = Rouge(
-            metrics=["rouge-n", "rouge-l"],
-            max_n=1,            # rouge-1
-            limit_length=True,
-            length_limit=1000,
-            length_limit_type="words",
-            use_tokenizer=True,
-            apply_avg=True,
-            apply_best=False,
-            alpha=0.5,
-            weight_factor=1.0,
+        # if args.solution_start in pred_answer:
+        #     return 0
+        P, R, F1 = bert_score(
+            [pred_answer], [true_answer],
+            lang="ko",
+            model_type="bert-base-multilingual-cased",
+            verbose=False
         )
-        scores = rouge.get_scores([pred_answer], [true_answer])
-        return scores["rouge-1"]["f"]
+        return F1[0].item()
 
     def check_answer(prompts, completions, answer, **kwargs):
         """

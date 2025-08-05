@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-"""
-Phase 1 실험 실행 스크립트
-간단한 설정으로 프롬프팅 실험을 실행할 수 있습니다.
-"""
 
-from __init__ import *
 from phase1_prompting_experiment import PromptingExperiment
 
 

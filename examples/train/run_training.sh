@@ -25,7 +25,7 @@ user_prompt="아래 문제를 단계별로 자세히 해설해주고, 마지막�
 answer_tag="정답:"
 
 
-nohup accelerate launch --config_file accelerate/fsdp_config.yaml phase3_grpo_6_fsdp.py \
+nohup accelerate launch --config_file accelerate/fsdp_config.yaml --module phase3_grpo_6_fsdp \
   --model "skt/A.X-4.0-Light" \
   --temperature 1.1 \
   --epochs 15 \

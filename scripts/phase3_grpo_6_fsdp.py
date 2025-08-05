@@ -1,22 +1,29 @@
-# !pip install unsloth unsloth_zoo
-import torch
-from rouge_metric import Rouge
-from bert_score import score as bert_score
-from dotenv import load_dotenv
-from transformers import AutoModelForCausalLM
-from transformers import AutoTokenizer
-from peft import get_peft_model, LoraConfig
-from trl import GRPOConfig, GRPOTrainer
-from vllm import SamplingParams
-from datasets import Dataset
-import pandas as pd
-import re
+import argparse
 import json
 import os
-import wandb
+import re
+import warnings
+from pathlib import Path
+
 import numpy as np
-import argparse
-from reward_func import *
+import pandas as pd
+import torch
+from datasets import Dataset
+from dotenv import load_dotenv
+from peft import PeftConfig
+from rouge_score import rouge_scorer
+from sklearn.metrics import accuracy_score, f1_score
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import GRPOConfig, GRPOTrainer
+from unsloth import FastLanguageModel
+from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
+import wandb
+
+
+warnings.filterwarnings('ignore')
+load_dotenv()
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 3: GRPO Experiment")

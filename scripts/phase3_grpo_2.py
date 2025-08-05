@@ -1,19 +1,45 @@
-# !pip install unsloth unsloth_zoo
-from unsloth import FastLanguageModel
-import torch
 import argparse
-from rouge_metric import Rouge
 import json
+import os
+import re
+import warnings
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+from datasets import Dataset
+from dotenv import load_dotenv
+from peft import PeftConfig
+from rouge_score import rouge_scorer
+from sklearn.metrics import accuracy_score, f1_score
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import GRPOConfig, GRPOTrainer
+from unsloth import FastLanguageModel
+from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
+import wandb
+
+
+warnings.filterwarnings('ignore')
+load_dotenv()
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 3: GRPO Experiment")
     parser.add_argument("--model", default="kakaocorp/kanana-1.5-8b-instruct-2505", help="Model name to use")
-    parser.add_argument("--temperature", default=0.8, type=float, help="Sampling temperature")
+    parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
+    parser.add_argument("--lora_rank", default=8, type=int, help="LoRA rank")
+    parser.add_argument("--epochs", default=5, type=int, help="epochs")
+    parser.add_argument("--system_prompt", default='', type=str, help="system_prompt")
+    parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
+    parser.add_argument("--data_path", default='data/preprocessed/grpo_train.csv', type=str, help="data_path")
+    parser.add_argument("--save_name", default='', type=str, help="save_name")
 
     args = parser.parse_args()
 
     max_seq_length = 2048 # Can increase for longer reasoning traces
-    lora_rank = 32 # Larger rank = smarter, but slower
+    lora_rank = args.lora_rank # Larger rank = smarter, but slower
 
     model_name = args.model
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -37,51 +63,16 @@ def main():
         random_state = 3407,
     )
 
-
-    reasoning_start = "<think>" # Acts as <think>
-    reasoning_end   = "</think>"   # Acts as </think>
-    solution_start  = "<answer>"
-    solution_end    = "</answer>"
-
-    system_prompt = f"""당신은 한국의 문화에 기반하여 질문에 신뢰도 높고 정확한 답변을 생성하는 한국어 전문가 AI입니다.
-
-사용자가 입력한 다음 정보를 참고하여 문제에 가장 적합한 정답을 작성하십시오:
-- 카테고리(category) 및 도메인(domain): 질문이 속한 전반적인 지식 분야
-- 주제(topic_keyword): 문제의 핵심 키워드
-- 질문 유형(question_type): '선다형', '단답형', 또는 '서술형' 중 하나
-- 질문 내용(question): 사용자가 직접 묻는 질문
-
-답변은 다음과 같은 형식을 따라야 합니다:
-1. **선다형 (Multiple Choice)**  
-- 보기 중 정답에 해당하는 번호만 **숫자**로 출력하십시오.
-
-2. **단답형 (Short Answer)**  
-- 5어절 이내의 **명사 또는 구**로 답하십시오.  
-
-3. **서술형 (Descriptive Answer)**  
-- 500자 이내의 문장으로 설명하십시오.
-
-문제를 분석하고 답을 추론한 과정을 다음 형식으로 작성하십시오:
-{reasoning_start}
-문제를 해결하기 위한 추론 과정을 한국어로 서술합니다.
-
-최종 정답은 다음 형식으로 작성하십시오:
-{solution_start}
-위 작성된 내용을 토대로 최종 정답만을 출력합니다."""
-
-    import pandas as pd
-    from datasets import Dataset
-    
-    training_df = pd.read_csv('/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train.csv')
+    training_df = pd.read_csv(args.data_path)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
     training_df['question'] = training_df['question'].astype(str).str.strip()
     training_df["prompt"] = training_df.apply(lambda row: (
         f"주어진 질문에 적절한 답변을 해주세요.\n\n"
-        f"category: {row['category']}\n"
-        f"domain: {row['domain']}\n"
-        f"topic_keyword: {row['topic_keyword']}\n"
-        f"question_type: {row['question_type']}\n\n"
-        f"<질문>\n{row['question']}\n\n답변:"), axis=1)
+        f"카테고리: {row['category']}\n"
+        f"도메인: {row['domain']}\n"
+        f"키워드: {row['topic_keyword']}\n"
+        f"질문 유형: {row['question_type']}\n\n"
+        f"질문: {row['question']}\n\n답변:"), axis=1)
 
     # 2. Dataset으로 변환
     dataset = Dataset.from_pandas(training_df[["prompt", "answer"]])
@@ -89,21 +80,19 @@ def main():
     # 3. Chat format으로 변환
     dataset = dataset.map(lambda x: {
         "prompt": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": args.system_prompt},
             {"role": "user", "content": x["prompt"]}
         ],
         "answer": x["answer"]
     })
 
+    print("Dataset loaded and formatted.")
     print(dataset[0])
-    import re
+
 
     match_format = re.compile(
-        # rf"{reasoning_end}.*?"\
-        rf"{solution_start}(.+?)"\
-        rf"[\s]{{0,}}$",
-        flags = re.DOTALL
-    )
+        rf"{args.solution_start}(.+?)$", re.DOTALL)
+
 
     def match_format_exactly(completions, **kwargs):
         scores = []
@@ -111,7 +100,7 @@ def main():
             score = 0
             response = completion[0]["content"]
             match = match_format.findall(response)
-            if match and ('<answer>' not in match[0]) and ('<think>' not in match[0]): score += 1.0
+            if match and ('<think>' not in match[0]) and ('</think>' not in match[0]) and ('<answer>' not in match[0]): score += 1.0
             scores.append(score)
         return scores
 
@@ -160,28 +149,27 @@ def main():
         3) 해당 evaluate_* 호출 → 점수 리스트 반환
         """
         # 1) raw 모델 출력만 꺼내기
-        responses = [c[0]["content"] for c in completions]
+        responses = [c[0]["content"].strip() for c in completions]
 
         # 2) <answer> 태그 내부 정답만 뽑기
         preds = []
         for r in responses:
             m = match_format.search(r)
-            preds.append(m.group(1).strip() if m else "")
+            preds.append(m.group(1).replace('</answer>','').strip() if m else "")
 
         scores = []
         for i, (pred, true) in enumerate(zip(preds, answer)):
             user_txt = prompts[i][-1]["content"]
             # 3) question_type 파싱
-            qt_m = re.search(r"question_type:\s*(선다형|단답형|서술형)", user_txt)
-            qtype = qt_m.group(1)
+            qt_m = re.search(r"질문 유형: (선다형|단답형|서술형)", user_txt)
+            qtype = qt_m.group(1).strip()
 
             if qtype == "선다형":
                 scores.append(evaluate_multiple_choice(pred, true))
             elif qtype == "단답형":
                 scores.append(evaluate_short_answer(pred, true))
             else: # "서술형"
-                scores.append(evaluate_long_answer(pred, true))
-
+                scores.append(evaluate_long_answer(responses[i], true))
 
         return scores
 
@@ -192,7 +180,6 @@ def main():
     print(tokenizer.decode(tokenized[0]["tokens"]))
     tokenized = tokenized.map(lambda x: {"L" : len(x["tokens"])})
 
-    import numpy as np
     maximum_length = int(np.quantile(tokenized["L"], 1.0))
     print("Max Length = ", maximum_length)
 
@@ -202,21 +189,20 @@ def main():
     max_prompt_length = maximum_length + 1 # + 1 just in case!
     max_completion_length = max_seq_length - max_prompt_length
 
-    from vllm import SamplingParams
     vllm_sampling_params = SamplingParams(
-        top_p = 1.0,
-        top_k = 20,
+        min_p = 0.1,
+        top_p = 0.95,
+        top_k = -1,
         seed = 3407,
         stop = [tokenizer.eos_token],
         include_stop_str_in_output = True,
     )
 
-    num_train_epochs = 3
-    save_name = f"grpo_v1_{model_name.split('/')[-1]}"
+    num_train_epochs = args.epochs
+    save_name = f"grpo_v3_{model_name.split('/')[-1]}_{args.save_name}"
 
     # ✅ wandb 초기화
-    import wandb
-
+    # .env 파일 로드
     load_dotenv()
     wandb_api_key = os.getenv("WANDB_API_KEY")
 
@@ -227,27 +213,28 @@ def main():
         name=save_name,  # W&B에 기록됨
     )
 
-    from trl import GRPOConfig, GRPOTrainer
     training_args = GRPOConfig(
         vllm_sampling_params = vllm_sampling_params,
         temperature = args.temperature,
-        learning_rate = 5e-6,
+        learning_rate = 2e-6,
         weight_decay = 0.01,
-        warmup_ratio = 0.05,
-        lr_scheduler_type = "linear",
+        warmup_ratio = 0.03,
+        lr_scheduler_type = "constant",
         optim = "adamw_8bit",
         logging_steps = 1,
+        repetition_penalty = 1.1,
         per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 16, # Increase to 4 for smoother training
+        gradient_accumulation_steps = 8, # Increase to 4 for smoother training
         num_generations = 8, # Decrease if out of memory
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
-        save_steps = 0.49 / num_train_epochs,
+        save_steps = 0.5 / num_train_epochs,
         report_to = "wandb", # Can use Weights & Biases
         output_dir = f"models/{save_name}",
-        log_completions = True
-
+        log_completions = True,
+        mask_truncated_completions = True,
+        shuffle_dataset = True,
         # For optional training + evaluation
         # fp16_full_eval = True,
         # per_device_eval_batch_size = 4,
