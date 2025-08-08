@@ -7,15 +7,6 @@ match_format = re.compile(
 english_word_re = re.compile(r'[a-zA-Z]{2,}')   # 영어 단어 (길이 2 이상)
 paren_re = re.compile(r'\([^)]*\)')    
 
-def match_format_exactly(completions, **kwargs):
-    scores = []
-    for completion in completions:
-        score = 0
-        response = completion[0]["content"]
-        match = match_format.findall(response)
-        if match and ('<think>' not in match[0]) and ('</think>' not in match[0]) and ('<answer>' not in match[0]): score += 1.0
-        scores.append(score)
-    return scores
 
 def evaluate_multiple_choice(pred_answer: str, true_answer: str) -> float:
     """선다형: 보기 번호(1-5) 중 하나가 정답과 일치하면 1.0, 아니면 0.0"""
@@ -56,6 +47,16 @@ def evaluate_long_answer(pred_answer: str, true_answer: str) -> float:
     )
     return F1[0].item()
 
+def match_format_exactly(completions, **kwargs):
+    scores = []
+    for completion in completions:
+        score = 0
+        response = completion[0]["content"]
+        match = match_format.findall(response)
+        if match and ('<think>' not in match[0]) and ('</think>' not in match[0]) and ('<answer>' not in match[0]): score += 1.0
+        scores.append(score)
+    return scores
+
 def check_answer(prompts, completions, answer, **kwargs):
     """
     prompts:   [[{"role":"system","content":...}, {"role":"user","content":...}], ...]
@@ -91,9 +92,6 @@ def check_answer(prompts, completions, answer, **kwargs):
             scores.append(evaluate_long_answer(responses[i], true))
 
     return scores
-
-import re
-
 
 def penalize_english_overuse(completions, **kwargs):
     scores = []

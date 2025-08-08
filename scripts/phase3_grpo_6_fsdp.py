@@ -10,16 +10,20 @@ import pandas as pd
 import torch
 from datasets import Dataset
 from dotenv import load_dotenv
-from peft import PeftConfig
+import wandb
+
 from rouge_score import rouge_scorer
 from sklearn.metrics import accuracy_score, f1_score
+
+import unsloth
+from peft import PeftConfig
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 from unsloth import FastLanguageModel
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
-import wandb
+from utils.reward_func import match_format_exactly, check_answer, penalize_english_overuse
 
 
 warnings.filterwarnings('ignore')
