@@ -1,9 +1,11 @@
 import re
 
 match_format = re.compile(
-    # rf"{args.solution_start}(.+?)$", re.DOTALL
-    r"정답:(.+)"       # 태그 라인만 체크
+    # r"정답:(.+)$", re.DOTALL
+    # r"정답:(.+)"       # 태그 라인만 체크
+    r"정답:\s*(\S.*|(?:\r?\n\s*(\S.*)))"
     )
+
 english_word_re = re.compile(r'[a-zA-Z]{2,}')   # 영어 단어 (길이 2 이상)
 paren_re = re.compile(r'\([^)]*\)')    
 

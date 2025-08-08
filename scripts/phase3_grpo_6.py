@@ -198,8 +198,8 @@ def main():
         shuffle_dataset = True,
         # For optional training + evaluation
         fp16_full_eval = True if args.do_eval else None,
-        per_device_eval_batch_size = 1 if args.do_eval else None,
-        eval_accumulation_steps = 8 if args.do_eval else None,
+        per_device_eval_batch_size = 8 if args.do_eval else None,
+        eval_accumulation_steps = 1 if args.do_eval else None,
         eval_strategy = "steps" if args.do_eval else None,
         eval_steps = 0.49 / num_train_epochs if args.do_eval else None,
     )
