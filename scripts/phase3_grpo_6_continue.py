@@ -36,12 +36,9 @@ def main():
     parser.add_argument("--lora_rank", default=32, type=int, help="LoRA rank")
     parser.add_argument("--lora_alpha", default=32, type=int, help="LoRA alpha")
     parser.add_argument("--epochs", default=8, type=int, help="epochs")
-    parser.add_argument("--epsilon", default=0.2, type=float, help="epsilon")
-    parser.add_argument("--epsilon_high", default=0.2, type=float, help="epsilon_high")
     parser.add_argument("--system_prompt", default='', type=str, help="system_prompt")
     parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
     parser.add_argument("--loss_type", default='bnpo', type=str, help="setting loss type")
-    parser.add_argument("--importance_sampling_level", default='token', type=str, help="importance_sampling_level")
     parser.add_argument("--train_data", default='data/preprocessed/grpo_train.csv', type=str, help="train data path")
     parser.add_argument("--valid_data", default='data/preprocessed/original_dev_excluded_서술형.csv', type=str, help="validation data path")
     parser.add_argument('--do_eval', action='store_true', help="start validation")
@@ -172,8 +169,11 @@ def main():
 
     wandb.init(
         project="moducorpus_korea_culture",
+        resume="must",         # 반드시 해당 run으로 이어 붙이기
+        id="rdp0qw3w",         # 주어진 run id
         name=save_name,  # W&B에 기록됨
     )
+
 
     training_args = GRPOConfig(
         vllm_sampling_params = vllm_sampling_params,
@@ -183,7 +183,6 @@ def main():
         warmup_ratio = 0,
         lr_scheduler_type = "cosine",
         loss_type = args.loss_type,
-        importance_sampling_level = args.importance_sampling_level,
         scale_rewards = False if args.loss_type=='dr_grpo' else True, # dr_grpo의 경우 False 권장
         optim = "adamw_8bit",
         logging_steps = 1,
@@ -191,8 +190,6 @@ def main():
         per_device_train_batch_size = 8,
         gradient_accumulation_steps = 2,
         num_generations = 8, # Decrease if out of memory
-        epsilon=args.epsilon,
-        epsilon_high=args.epsilon_high,
         max_prompt_length = max_prompt_length,
         max_completion_length = max_completion_length,
         num_train_epochs = num_train_epochs, # Set to 1 for a full training run
@@ -220,7 +217,7 @@ def main():
         reward_funcs = [
             match_format_exactly,
             check_answer,
-            # penalize_english_overuse
+            penalize_english_overuse
         ],
         args = training_args,
         train_dataset = train_dataset,
@@ -230,7 +227,8 @@ def main():
         # train_dataset = new_dataset["train"],
         # eval_dataset = new_dataset["test"],
     )
-    trainer.train()
+    # trainer.train()
+    trainer.train(resume_from_checkpoint=True)
 
 if __name__ == "__main__":
     main() 

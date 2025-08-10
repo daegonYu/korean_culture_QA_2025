@@ -855,21 +855,6 @@ nohup python -m scripts.phase3_grpo_6 \
   --do_eval \
   --save_name "original_train_선다형_단답형_v1_prompt2_dr_grpo"
 
-nohup python -m scripts.phase3_grpo_6 \
-  --model "trillionlabs/Tri-7B" \
-  --temperature 1.0 \
-  --epochs 10 \
-  --lora_rank 128 \
-  --lora_alpha 128 \
-  --loss_type 'gspo' \
-  --system_prompt "$system_prompt" \
-  --prompt_template "$user_prompt" \
-  --solution_start "$answer_tag" \
-  --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v1.csv" \
-  --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
-  --do_eval \
-  --save_name "original_train_선다형_단답형_v1_prompt2_gspo"
-
 
 ###
 
@@ -909,7 +894,8 @@ nohup python -m scripts.phase3_grpo_6 \
   --epochs 10 \
   --lora_rank 128 \
   --lora_alpha 128 \
-  --loss_type 'gspo' \
+  --epsilon_high 0.28 \
+  --importance_sampling_level "sequence" \
   --system_prompt "$system_prompt" \
   --prompt_template "$user_prompt" \
   --solution_start "$answer_tag" \

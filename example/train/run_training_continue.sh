@@ -39,36 +39,35 @@ answer_tag="정답:"
 #   --do_eval \
 #   --save_name "original_train_선다형_단답형_v2_prompt2_bnpo"
 
-# nohup python -m scripts.phase3_grpo_6 \
-#   --model "trillionlabs/Tri-7B" \
-#   --temperature 1.0 \
-#   --epochs 10 \
-#   --lora_rank 128 \
-#   --lora_alpha 128 \
-#   --loss_type 'dr_grpo' \
-#   --system_prompt "$system_prompt" \
-#   --prompt_template "$user_prompt" \
-#   --solution_start "$answer_tag" \
-#   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
-#   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
-#   --do_eval \
-#   --save_name "original_train_선다형_단답형_v2_prompt2_dr_grpo"
-
-nohup python -m scripts.phase3_grpo_6 \
+nohup python -m scripts.phase3_grpo_6_continue \
   --model "trillionlabs/Tri-7B" \
   --temperature 1.0 \
   --epochs 10 \
   --lora_rank 128 \
   --lora_alpha 128 \
-  --epsilon_high 0.28 \
-  --importance_sampling_level "sequence" \
+  --loss_type 'dr_grpo' \
   --system_prompt "$system_prompt" \
   --prompt_template "$user_prompt" \
   --solution_start "$answer_tag" \
   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
   --do_eval \
-  --save_name "original_train_선다형_단답형_v2_prompt2_gspo"
+  --save_name "original_train_선다형_단답형_v2_prompt2_dr_grpo"
+
+# nohup python -m scripts.phase3_grpo_6 \
+#   --model "trillionlabs/Tri-7B" \
+#   --temperature 1.0 \
+#   --epochs 10 \
+#   --lora_rank 128 \
+#   --lora_alpha 128 \
+#   --loss_type 'gspo' \
+#   --system_prompt "$system_prompt" \
+#   --prompt_template "$user_prompt" \
+#   --solution_start "$answer_tag" \
+#   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
+#   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
+#   --do_eval \
+#   --save_name "original_train_선다형_단답형_v2_prompt2_gspo"
 
 # paths=(
 #     "/workspace/korean_culture_QA_2025/models/grpo_v6_Tri-7B_curri_선다형_단답형_v1_prompt2"
