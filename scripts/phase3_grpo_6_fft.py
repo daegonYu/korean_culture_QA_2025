@@ -179,7 +179,7 @@ def main():
         lr_scheduler_type="cosine",
         logging_steps=1,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=1,
+        gradient_accumulation_steps=16,
         num_train_epochs=args.epochs,
         save_strategy="epoch",
         eval_strategy=("epoch" if args.do_eval else "no"),  # 주의: GRPOConfig는 eval_strategy 사용
@@ -187,12 +187,12 @@ def main():
         optim="adamw_torch_fused",
         bf16=bool(torch.cuda.is_available()),
         # gradient_checkpointing=True,      # FSDP와 동시 설정 시 에러
-        metric_for_best_model="eval/reward",
-        greater_is_better=True,
+        metric_for_best_model=("eval/reward" if args.do_eval else None),
+        greater_is_better=(True if args.do_eval else None),
 
         # --- GRPO 전용/데이터 전처리 ---
+        num_generations=8,
         max_prompt_length=max_prompt_length,
-        num_generations=2,
         max_completion_length=max_completion_length,
         shuffle_dataset=True,
 
@@ -207,7 +207,7 @@ def main():
         # --- vLLM 비활성(필드 자체는 GRPOConfig에 존재) ---
         use_vllm=True,
         vllm_mode="colocate",  # 기본값이 server라 생략 가능
-        vllm_gpu_memory_utilization = 0.5,
+        vllm_gpu_memory_utilization = 0.3,
         # vllm_server_base_url="http://127.0.0.1:8000",  # ← 정확한 키
 
         # --- 손실/학습 관련 ---
