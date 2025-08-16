@@ -12,15 +12,12 @@ from datasets import Dataset
 from dotenv import load_dotenv
 import wandb
 
-from rouge_score import rouge_scorer
-from sklearn.metrics import accuracy_score, f1_score
 
-import unsloth
+# import unsloth
 from peft import PeftConfig
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
-from unsloth import FastLanguageModel
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 from utils.reward_func import match_format_exactly, check_answer, penalize_english_overuse
@@ -33,8 +30,6 @@ def main():
     parser.add_argument("--model", default="kakaocorp/kanana-1.5-8b-instruct-2505", help="Model name to use")
     parser.add_argument("--prompt_template", required=True, help="Prompt template to use")
     parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
-    parser.add_argument("--lora_rank", default=32, type=int, help="LoRA rank")
-    parser.add_argument("--lora_alpha", default=32, type=int, help="LoRA alpha")
     parser.add_argument("--epochs", default=8, type=int, help="epochs")
     parser.add_argument("--epsilon", default=0.2, type=float, help="epsilon")
     parser.add_argument("--epsilon_high", default=0.2, type=float, help="epsilon_high")
@@ -49,32 +44,28 @@ def main():
 
     args = parser.parse_args()
 
-    max_seq_length = 3096 # Can increase for longer reasoning traces
-    lora_rank = args.lora_rank # Larger rank = smarter, but slower
-    lora_alpha = args.lora_alpha # Larger rank = smarter, but slower
+    # if torch.cuda.is_available() and int(os.environ.get("WORLD_SIZE","1")) > 1:
+    #     local_rank = int(os.environ["LOCAL_RANK"])
+    #     torch.cuda.set_device(local_rank)   # ★ init_process_group 전에!
+    #     print(f"[rank {os.environ.get('RANK','0')}] local_rank={local_rank}, cuda_current={torch.cuda.current_device()}")
 
-    model_name = args.model
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = model_name, # Use Qwen3-4B-Base for 4B model
-        max_seq_length = max_seq_length,
-        load_in_4bit = False, # False for LoRA 16bit
-        load_in_8bit = False,
-        fast_inference = True, # Enable vLLM fast inference
-        max_lora_rank = lora_rank,
-        gpu_memory_utilization = 0.5, # Reduce if out of memory
-    )
+    max_seq_length = 1024 # Can increase for longer reasoning traces
+    tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
+    if tokenizer.pad_token is None:
+        # causal LM에서 흔히 pad=eos로 설정
+        tokenizer.pad_token = tokenizer.eos_token
+    # 길이 긴 프롬프트에서 안전
+    tokenizer.padding_side = "left"
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r = lora_rank, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-        target_modules = [
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
-        ],
-        lora_alpha = lora_alpha,
-        use_gradient_checkpointing = "unsloth", # Reduces memory usage
-        random_state = 3407,
+    # dtype은 환경에 맞게 자동/선택
+    dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model,
+        torch_dtype=dtype,
     )
+    # 학습 시 반드시 켜주기(메모리 절약)
+    model.config.use_cache = False  # gradient checkpointing 시 권장
+
 
     training_df = pd.read_csv(args.train_data)
     training_df['answer'] = training_df['answer'].astype(str).str.strip()
@@ -151,17 +142,7 @@ def main():
     max_prompt_length = maximum_length + 1 # + 1 just in case!
     max_completion_length = max_seq_length - max_prompt_length
 
-    vllm_sampling_params = SamplingParams(
-        min_p = 0.1,
-        top_p = 0.95,
-        top_k = -1,
-        seed = 3407,
-        stop = [tokenizer.eos_token],
-        include_stop_str_in_output = True,
-    )
-
     num_train_epochs = args.epochs
-    save_name = f"grpo_v6_{model_name.split('/')[-1]}_{args.save_name}"
 
     # ✅ wandb 초기화
     # .env 파일 로드
@@ -172,43 +153,81 @@ def main():
 
     wandb.init(
         project="moducorpus_korea_culture",
-        name=save_name,  # W&B에 기록됨
+        name=f"grpo_v6_{args.model.split('/')[-1]}_{args.save_name}",
     )
 
-    training_args = GRPOConfig(
-        vllm_sampling_params = vllm_sampling_params,
-        temperature = args.temperature,
-        learning_rate = 5e-6,
-        weight_decay = 0.01,
-        warmup_ratio = 0,
-        lr_scheduler_type = "cosine",
-        loss_type = args.loss_type,
-        importance_sampling_level = args.importance_sampling_level,
-        scale_rewards = False if args.loss_type=='dr_grpo' else True, # dr_grpo의 경우 False 권장
-        optim = "adamw_8bit",
-        logging_steps = 1,
-        repetition_penalty = 1.05,
-        per_device_train_batch_size = 8,
-        gradient_accumulation_steps = 2,
-        num_generations = 8, # Decrease if out of memory
-        epsilon=args.epsilon,
-        epsilon_high=args.epsilon_high,
-        max_prompt_length = max_prompt_length,
-        max_completion_length = max_completion_length,
-        num_train_epochs = num_train_epochs, # Set to 1 for a full training run
-        save_steps = 0.49 / num_train_epochs,
-        report_to = "wandb", # Can use Weights & Biases
-        output_dir = f"models/{save_name}",
-        log_completions = True,
-        mask_truncated_completions = True,
-        shuffle_dataset = True,
-        # For optional training + evaluation
-        fp16_full_eval = True if args.do_eval else None,
-        per_device_eval_batch_size = 8 if args.do_eval else None,
-        eval_accumulation_steps = 1 if args.do_eval else None,
-        eval_strategy = "steps" if args.do_eval else None,
-        eval_steps = 0.49 / num_train_epochs if args.do_eval else None,
+    # vLLM SamplingParams (GRPO는 내부에서 vllm 호출)
+    vllm_sampling_params = SamplingParams(
+        temperature=args.temperature,
+        min_p=0.1,
+        top_p=0.95,
+        top_k=-1,
+        seed=3407,
+        # eos로 자동 종료되므로 stop 문자열은 생략 (특수토큰 문자열 미정일 때 안전)
+        include_stop_str_in_output=True,
+        repetition_penalty=1.05,
     )
+
+    # 6) GRPOConfig — **GRPOConfig 제공 필드만 사용**
+    training_args = GRPOConfig(
+        # --- TrainingArguments 계열 ---
+        output_dir=f"models/grpo_v6_{args.model.split('/')[-1]}_{args.save_name}",
+        report_to= "wandb",
+        learning_rate=1e-6,
+        weight_decay=0.01,
+        warmup_ratio=0.03,
+        lr_scheduler_type="cosine",
+        logging_steps=1,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=1,
+        num_train_epochs=args.epochs,
+        save_strategy="epoch",
+        eval_strategy=("epoch" if args.do_eval else "no"),  # 주의: GRPOConfig는 eval_strategy 사용
+        save_total_limit=1,
+        optim="adamw_torch_fused",
+        bf16=bool(torch.cuda.is_available()),
+        # gradient_checkpointing=True,      # FSDP와 동시 설정 시 에러
+        metric_for_best_model="eval/reward",
+        greater_is_better=True,
+
+        # --- GRPO 전용/데이터 전처리 ---
+        max_prompt_length=max_prompt_length,
+        num_generations=2,
+        max_completion_length=max_completion_length,
+        shuffle_dataset=True,
+
+        # --- 생성 파라미터(모두 GRPOConfig 필드) ---
+        temperature=args.temperature,
+        top_p=0.95,
+        top_k=None,
+        min_p=0.1,
+        repetition_penalty=1.05,
+        # generation_kwargs=None,  # 필요시 추가(충돌 시 여기가 우선)
+
+        # --- vLLM 비활성(필드 자체는 GRPOConfig에 존재) ---
+        use_vllm=True,
+        vllm_mode="colocate",  # 기본값이 server라 생략 가능
+        vllm_gpu_memory_utilization = 0.5,
+        # vllm_server_base_url="http://127.0.0.1:8000",  # ← 정확한 키
+
+        # --- 손실/학습 관련 ---
+        beta=0.0,
+        epsilon=args.epsilon,
+        epsilon_high=args.epsilon_high,  # DAPO 권고: 0.28 참고
+        importance_sampling_level=args.importance_sampling_level,  # 'token'|'sequence'
+        scale_rewards=(False if args.loss_type == "dr_grpo" else True),
+        loss_type=args.loss_type,  # 'grpo'|'bnpo'|'dr_grpo'
+        mask_truncated_completions=True,
+        log_completions=True,
+
+        dataloader_num_workers=0,          # ★ 교착 회피 1순위
+        ddp_find_unused_parameters=False,   # 미사용 파라미터 탐색 off (교착/느려짐 방지)
+        ddp_backend="nccl",
+    )
+
+    print("bf16 =", training_args.bf16)
+    print("eval strategy =", training_args.eval_strategy)
+
     print(f"train_dataset:\n{train_dataset}")
     print(train_dataset[0]['prompt'][0]['content'])
     # For optional training + evaluation

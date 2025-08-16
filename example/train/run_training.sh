@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 set -e
+ACC_CFG="/workspace/korean_culture_QA_2025/accelerate/fsdp_config.yaml"   # accelerate config 결과 저장해둔 파일
+
+# export CUDA_VISIBLE_DEVICES=0,1,2,3
+# export MASTER_ADDR=127.0.0.1
+# export MASTER_PORT=29500
+# export NCCL_P2P_DISABLE=1
+# export NCCL_IB_DISABLE=1
+# export NCCL_ASYNC_ERROR_HANDLING=1
+# export NCCL_BLOCKING_WAIT=1
+# export NCCL_SOCKET_IFNAME=eth0
+# export NCCL_DEBUG=INFO
+# export PYTHONFAULTHANDLER=1
+
+# SHM 작은 환경이면 일단 켭니다 (재기동 전 임시 회피)
+# export NCCL_SHM_DISABLE=1
 
 system_prompt="당신은 한국의 문화와 관련된 문제를 전문적으로 풀이해주는 문제 해설가입니다.  
 사용자가 입력한 문제에 대해 단계별로 차근차근(step by step) 설명하여 **문제 해설**과 **정답**을 제시하세요.  
@@ -24,43 +39,33 @@ user_prompt="한국의 문화와 관련된 아래 문제를 단계별로 자세�
 answer_tag="정답:"
 
 
-# nohup python -m scripts.phase3_grpo_6 \
+# nohup torchrun --standalone --nproc_per_node=2 \
+#   -m scripts.phase3_grpo_6_fft \
 #   --model "trillionlabs/Tri-7B" \
 #   --temperature 1.0 \
 #   --epochs 10 \
-#   --lora_rank 128 \
-#   --lora_alpha 128 \
-#   --loss_type 'bnpo' \
+#   --epsilon 0.2 \
+#   --epsilon_high 0.28 \
+#   --loss_type "grpo" \
+#   --importance_sampling_level "sequence" \
 #   --system_prompt "$system_prompt" \
 #   --prompt_template "$user_prompt" \
 #   --solution_start "$answer_tag" \
 #   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
 #   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
 #   --do_eval \
-#   --save_name "original_train_선다형_단답형_v2_prompt2_bnpo"
+#   --save_name "original_train_선다형_단답형_v2_prompt2_gspo_fft" \
+#   > train.log
 
-# nohup python -m scripts.phase3_grpo_6 \
-#   --model "trillionlabs/Tri-7B" \
-#   --temperature 1.0 \
-#   --epochs 10 \
-#   --lora_rank 128 \
-#   --lora_alpha 128 \
-#   --loss_type 'dr_grpo' \
-#   --system_prompt "$system_prompt" \
-#   --prompt_template "$user_prompt" \
-#   --solution_start "$answer_tag" \
-#   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
-#   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
-#   --do_eval \
-#   --save_name "original_train_선다형_단답형_v2_prompt2_dr_grpo"
-
-nohup python -m scripts.phase3_grpo_6 \
+nohup accelerate launch \
+  --config_file "$ACC_CFG" \
+  -m scripts.phase3_grpo_6_fft \
   --model "trillionlabs/Tri-7B" \
   --temperature 1.0 \
   --epochs 10 \
-  --lora_rank 128 \
-  --lora_alpha 128 \
+  --epsilon 0.2 \
   --epsilon_high 0.28 \
+  --loss_type "grpo" \
   --importance_sampling_level "sequence" \
   --system_prompt "$system_prompt" \
   --prompt_template "$user_prompt" \
@@ -68,27 +73,5 @@ nohup python -m scripts.phase3_grpo_6 \
   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
   --do_eval \
-  --save_name "original_train_선다형_단답형_v2_prompt2_gspo"
-
-# paths=(
-#     "/workspace/korean_culture_QA_2025/models/grpo_v6_Tri-7B_curri_선다형_단답형_v1_prompt2"
-# )
-
-# for path in "${paths[@]}"; do
-#     echo "🔍 상위 경로: $path"
-#     find "$path" -mindepth 1 -type d | while read -r model; do
-#         echo "🔍 현재 경로: $model"
-#         nohup python run_phase1.py --model "$model" --use_test --use_wandb \
-#         --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag"
-
-#         dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
-#         checkpoint=$(basename "$model")            # "checkpoint-112"
-#         model_name="${dir_name}_${checkpoint}"     # "grpo_v2_A.X-4.0-Light_선다형_단답형_checkpoint-112"
-
-#         echo "Model name: $model_name"
-
-#         json_path="results/phase1_${model_name}_test_outputs.json"
-#         echo "Scoring: $json_path"
-#         python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
-#     done
-# done
+  --save_name "original_train_선다형_단답형_v2_prompt2_gspo_fft" \
+  > train.log
