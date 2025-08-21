@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-ACC_CFG="/workspace/korean_culture_QA_2025/accelerate/fsdp_config.yaml"   # accelerate config 결과 저장해둔 파일
+ACC_CFG="/workspace/korean_culture_QA_2025/accelerate/fsdp_v1_config.yaml"   # accelerate config 결과 저장해둔 파일
 
 # export CUDA_VISIBLE_DEVICES=0,1
 # export MASTER_ADDR=127.0.0.1
@@ -39,39 +39,19 @@ user_prompt="한국의 문화와 관련된 아래 문제를 단계별로 자세�
 answer_tag="정답:"
 
 
-# nohup torchrun --standalone --nproc_per_node=2 \
-#   -m scripts.phase3_grpo_6_fft \
-#   --model "trillionlabs/Tri-7B" \
-#   --temperature 1.0 \
-#   --epochs 10 \
-#   --epsilon 0.2 \
-#   --epsilon_high 0.28 \
-#   --loss_type "grpo" \
-#   --importance_sampling_level "sequence" \
-#   --system_prompt "$system_prompt" \
-#   --prompt_template "$user_prompt" \
-#   --solution_start "$answer_tag" \
-#   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
-#   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
-#   --do_eval \
-#   --save_name "original_train_선다형_단답형_v2_prompt2_gspo_fft" \
-#   > train.log
-
 nohup accelerate launch \
   --config_file "$ACC_CFG" \
   --num_processes 2 \
-  -m scripts.phase3_grpo_6_fft \
+  -m scripts.train.phase3_grpo_6_fft \
   --model "trillionlabs/Tri-7B" \
   --temperature 1.0 \
   --epochs 10 \
   --epsilon 0.2 \
   --epsilon_high 0.28 \
-  --loss_type "grpo" \
-  --importance_sampling_level "sequence" \
   --system_prompt "$system_prompt" \
   --prompt_template "$user_prompt" \
   --solution_start "$answer_tag" \
   --train_data "/workspace/korean_culture_QA_2025/data/preprocessed/grpo_train_excluded_서술형_trillion_curriculum_v2.csv" \
   --valid_data "/workspace/korean_culture_QA_2025/data/preprocessed/original_dev_excluded_서술형.csv" \
-  --save_name "original_train_선다형_단답형_v2_prompt2_gspo_fft" \
+  --save_name "original_train_선다형_단답형_v2_prompt2_grpo_fft" \
   > train.log

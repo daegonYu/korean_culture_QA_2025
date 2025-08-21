@@ -3,14 +3,18 @@ debug: true
 distributed_type: FSDP
 downcast_bf16: 'no'
 enable_cpu_affinity: false
+
 fsdp_config:
-  fsdp_activation_checkpointing: true
+  fsdp_version: 1                     # ★ v1
   fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: LlamaDecoderLayer
+  fsdp_sharding_strategy: FULL_SHARD  # v1에서는 전략(enum)로 지정 (NO_SHARD|SHARD_GRAD_OP|FULL_SHARD|HYBRID_SHARD)
+  fsdp_activation_checkpointing: true
   fsdp_cpu_ram_efficient_loading: false
   fsdp_offload_params: false
-  fsdp_reshard_after_forward: true
-  fsdp_state_dict_type: SHARDED_STATE_DICT   # FULL_STATE_DICT
-  fsdp_version: 2
+  fsdp_state_dict_type: FULL_STATE_DICT #   SHARDED_STATE_DICT
+  fsdp_use_orig_params: true
+
 machine_rank: 0
 main_training_function: main
 mixed_precision: bf16

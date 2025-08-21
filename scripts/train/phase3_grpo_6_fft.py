@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--temperature", default=1.0, type=float, help="Sampling temperature")
     parser.add_argument("--epochs", default=8, type=int, help="epochs")
     parser.add_argument("--epsilon", default=0.2, type=float, help="epsilon")
-    parser.add_argument("--epsilon_high", default=0.2, type=float, help="epsilon_high")
+    parser.add_argument("--epsilon_high", default=0.28, type=float, help="epsilon_high")
     parser.add_argument("--system_prompt", default='', type=str, help="system_prompt")
     parser.add_argument("--solution_start", default='', type=str, help="answer start tag")
     parser.add_argument("--loss_type", default='bnpo', type=str, help="setting loss type")
@@ -49,7 +49,7 @@ def main():
     #     torch.cuda.set_device(local_rank)   # ★ init_process_group 전에!
     #     print(f"[rank {os.environ.get('RANK','0')}] local_rank={local_rank}, cuda_current={torch.cuda.current_device()}")
 
-    max_seq_length = 1024 # Can increase for longer reasoning traces
+    max_seq_length = 1200 # Can increase for longer reasoning traces
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
     if tokenizer.pad_token is None:
         # causal LM에서 흔히 pad=eos로 설정
@@ -133,10 +133,10 @@ def main():
     print(tokenizer.decode(train_tokenized[0]["tokens"]))
     train_tokenized = train_tokenized.map(lambda x: {"L" : len(x["tokens"])})
 
-    maximum_length = int(np.quantile(train_tokenized["L"], 1.0))
+    maximum_length = int(np.quantile(train_tokenized["L"], 0.97))
     print("Max Length = ", maximum_length)
 
-    # train_dataset = train_dataset.select(np.where(np.array(tokenized["L"]) <= maximum_length)[0])
+    train_dataset = train_dataset.select(np.where(np.array(train_tokenized["L"]) <= maximum_length)[0])
     del train_tokenized
 
     max_prompt_length = maximum_length + 1 # + 1 just in case!
@@ -175,16 +175,18 @@ def main():
         report_to= "wandb",
         learning_rate=1e-6,
         weight_decay=0.01,
-        warmup_ratio=0.03,
+        warmup_ratio=0.0,
         lr_scheduler_type="cosine",
         logging_steps=1,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
+        gradient_accumulation_steps=8,
         num_train_epochs=args.epochs,
+        save_only_model=True,
         save_strategy="epoch",
+        # save_steps=3,
         eval_strategy=("epoch" if args.do_eval else "no"),  # 주의: GRPOConfig는 eval_strategy 사용
-        save_total_limit=1,
-        optim="adamw_torch_fused",
+        # save_total_limit=1,
+        optim="paged_adamw_8bit",
         bf16=bool(torch.cuda.is_available()),
         # gradient_checkpointing=True,      # FSDP와 동시 설정 시 에러
         metric_for_best_model=("eval/reward" if args.do_eval else None),
@@ -207,7 +209,7 @@ def main():
         # --- vLLM 비활성(필드 자체는 GRPOConfig에 존재) ---
         use_vllm=True,
         vllm_mode="colocate",  # 기본값이 server라 생략 가능
-        vllm_gpu_memory_utilization = 0.3,
+        vllm_gpu_memory_utilization = 0.2,
         # vllm_server_base_url="http://127.0.0.1:8000",  # ← 정확한 키
 
         # --- 손실/학습 관련 ---
@@ -219,6 +221,7 @@ def main():
         loss_type=args.loss_type,  # 'grpo'|'bnpo'|'dr_grpo'
         mask_truncated_completions=True,
         log_completions=True,
+        wandb_log_unique_prompts =True,
 
         dataloader_num_workers=0,          # ★ 교착 회피 1순위
         ddp_find_unused_parameters=False,   # 미사용 파라미터 탐색 off (교착/느려짐 방지)

@@ -1,6 +1,7 @@
 
-from phase1_prompting_experiment import PromptingExperiment
-
+from scripts.phase1_prompting_experiment import PromptingExperiment
+import argparse
+import torch
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 1: Prompting Experiment")
@@ -8,15 +9,17 @@ def main():
     parser.add_argument("--data_path", default="data", help="Path to data directory")
     parser.add_argument("--sample_size", type=int, default=None, help="Number of samples to test (default: all)")
     parser.add_argument("--use_train", action="store_true", help="Use train set instead of dev set")
+    parser.add_argument("--use_dev", action="store_true", help="Use dev set instead of dev set")
     parser.add_argument("--use_test", action="store_true", help="Use test set instead of dev set")
     parser.add_argument("--use_lora", action="store_true", default=False, help="Use LoRA layers")
     parser.add_argument("--use_wandb", action="store_true", default=False, help="Use WANDB")
     parser.add_argument("--max_lora_rank", type=int, default=64, help="Max LoRA rank (default: 64)")
     parser.add_argument("--system_prompt", type=str, default="당신은 한국 문화 전문가입니다. 질문에 답하세요.")
     parser.add_argument("--user_prompt", type=str, required=True)
-    parser.add_argument("--system_prompt2", type=str, required=False, type=str, default=None, help="(Optional) Separate system prompt for descriptive (서술형) question type")
-    parser.add_argument("--user_prompt2", type=str, required=False, type=str, default=None, help="(Optional) Separate user prompt for descriptive (서술형) question type")
+    parser.add_argument("--system_prompt2", type=str, required=False, default=None, help="(Optional) Separate system prompt for descriptive (서술형) question type")
+    parser.add_argument("--user_prompt2", type=str, required=False, default=None, help="(Optional) Separate user prompt for descriptive (서술형) question type")
     parser.add_argument("--answer_tag", type=str, default="정답:")
+    parser.add_argument("--gpu_memory_utilization", type=float, default=0.9, help="GPU memory utilization (default: 0.9)")
 
     args = parser.parse_args()
     
@@ -39,7 +42,8 @@ def main():
         answer_tag=args.answer_tag,
         use_lora=args.use_lora,
         max_lora_rank=args.max_lora_rank if args.use_lora else None,  
-        use_wandb=args.use_wandb
+        use_wandb=args.use_wandb,
+        gpu_memory_utilization=args.gpu_memory_utilization
     )
     experiment.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     

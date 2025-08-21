@@ -1,5 +1,5 @@
-from __init__ import *
-from phase1_prompting_experiment import PromptingExperiment
+from scripts.phase1_prompting_experiment import PromptingExperiment
+import argparse
 
 def file_merge(json_path):
 

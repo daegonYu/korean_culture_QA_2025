@@ -10,17 +10,20 @@ import pandas as pd
 import torch
 from datasets import Dataset
 from dotenv import load_dotenv
-from peft import PeftConfig
+import wandb
+
 from rouge_score import rouge_scorer
+from utils.rouge_metric import Rouge
 from sklearn.metrics import accuracy_score, f1_score
+
+import unsloth
+from peft import PeftConfig
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 from unsloth import FastLanguageModel
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
-import wandb
-
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -28,7 +31,8 @@ load_dotenv()
 
 class PromptingExperiment:
     def __init__(self, model_name="beomi/Kanana-8B", load_model=True, use_lora=False, use_wandb=False, \
-                system_prompt="", system_prompt2="", user_prompt="", user_prompt2="", answer_tag="정답:", max_lora_rank=64):
+                system_prompt="", system_prompt2="", user_prompt="", user_prompt2="", answer_tag="정답:", max_lora_rank=64,
+                gpu_memory_utilization=0.9):
         """
         Phase 1: 프롬프팅 실험
         5가지 다른 프롬프트로 Kanana 8B 성능 테스트
@@ -76,7 +80,7 @@ class PromptingExperiment:
                 dtype="bfloat16",     # 또는 "float16", "auto"
                 trust_remote_code=True,
                 max_model_len=max_model_len,   # 최대 입력 길이
-                gpu_memory_utilization=0.9,  # GPU 메모리 사용률
+                gpu_memory_utilization=gpu_memory_utilization,  # GPU 메모리 사용률
             )
         elif load_model and self.use_lora:
             config = PeftConfig.from_pretrained(self.model_name)
@@ -87,7 +91,7 @@ class PromptingExperiment:
                 dtype="bfloat16",     # 또는 "float16", "auto"
                 trust_remote_code=True,
                 max_model_len=max_model_len,   # 최대 입력 길이
-                gpu_memory_utilization=0.9,  # GPU 메모리 사용률
+                gpu_memory_utilization=gpu_memory_utilization,  # GPU 메모리 사용률
                 enable_lora=self.use_lora,
                 max_lora_rank=self.max_lora_rank
             )
@@ -108,7 +112,7 @@ class PromptingExperiment:
         
         with open(data_dir / "train.json", "r", encoding="utf-8") as f:
             train_data = json.load(f)
-        with open(data_dir / "dev.json", "r", encoding="utf-8") as f:
+        with open(data_dir / "preprocessed/dev.json", "r", encoding="utf-8") as f:
             dev_data = json.load(f)
         with open(data_dir / "preprocessed/test.json", "r", encoding="utf-8") as f:
             test_data = json.load(f)
@@ -222,7 +226,6 @@ class PromptingExperiment:
     
     def evaluate_long_answer(self, pred_answer, true_answer):
         """서술형 평가 (ROUGE-1, ROUGE-2, ROUGE-L via rouge_metric)"""
-        from rouge_metric import Rouge
 
         rouge_evaluator = Rouge(
             metrics=["rouge-n", "rouge-l"],
@@ -328,6 +331,13 @@ class PromptingExperiment:
                 if self.answer_tag != '' and self.answer_tag in pred_answer:
                     pred_answer = pred_answer.split(self.answer_tag)[-1].strip()
                 pred_answer = pred_answer.replace('*', '').replace('</answer>','')
+
+                pattern = re.compile(r'^(?:\s*\n.*|[^\s].*)')
+                matches = pattern.findall(pred_answer)
+                if matches:
+                    pred_answer = matches[0].strip()
+                else:
+                    pred_answer = pred_answer.split('\n')[0].strip()
                 
                 # 질문 유형별 평가
                 if question_type == "선다형":
@@ -397,6 +407,13 @@ class PromptingExperiment:
                         answer_tag = '정답:'
                     pred_answer = pred_answer.split(answer_tag)[-1].strip()
                     pred_answer = pred_answer.replace('*', '').replace('</answer>','')
+                    
+                    pattern = re.compile(r'^(?:\s*\n.*|[^\s].*)')
+                    matches = pattern.findall(pred_answer)
+                    if matches:
+                        pred_answer = matches[0].strip()
+                    else:
+                        pred_answer = pred_answer.split('\n')[0].strip()
 
                     if rec['true_answer'] is None:
                         print('# 불량')

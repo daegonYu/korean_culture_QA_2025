@@ -15,7 +15,7 @@ system_prompt="당신은 한국의 문화와 관련된 문제를 전문적으로
     - 정답이 여러 개인 경우: 쉼표(,)로 구분해 나열하세요. (예: 사과, 배)  
     - 순서 배열 문제인 경우: '-'로 구분해 정확한 순서를 유지해 나열하세요. (예: ㄱ-ㄴ-ㄷ-ㄹ)"
 
-user_prompt="아래 문제를 단계별로 자세히 해설해주고, 마지막에 정답을 작성해줘.  
+user_prompt="한국의 문화와 관련된 아래 문제를 단계별로 자세히 해설해주고, 마지막에 정답을 작성해줘.  
 
 키워드: {topic_keyword}  
 문제 유형: {question_type}  
@@ -23,6 +23,7 @@ user_prompt="아래 문제를 단계별로 자세히 해설해주고, 마지막�
 
 # system_prompt2="당신은 한국의 문화와 관련된 문제를 전문적으로 풀이해주는 문제 해설가입니다.  
 # 사용자가 입력한 문제에 적절한 정답을 서술해주세요."
+
 system_prompt2="당신은 한국의 문화와 관련된 문제에 대해 적절한 답변을 합니다."
 
 user_prompt2="제시된 문제에 대해 적절한 정답을 작성해줘.  
@@ -71,14 +72,18 @@ answer_tag="정답:"
 
 
 paths=(
-    "/workspace/korean_culture_QA_2025/models/grpo_v6_Midm-2.0-Base-Instruct_curri_선다형_단답형_v1_prompt2/checkpoint-483"
+    "/workspace/korean_culture_QA_2025/models/grpo_v6_Tri-7B_original_train_선다형_단답형_v2_prompt2_gspo_fft/checkpoint-540"
+    "/workspace/korean_culture_QA_2025/models/grpo_v6_Tri-7B_original_train_선다형_단답형_v2_prompt2_gspo_fft/checkpoint-648"
+    "/workspace/korean_culture_QA_2025/models/grpo_v6_Tri-7B_original_train_선다형_단답형_v2_prompt2_gspo_fft/checkpoint-756"
 )
 
 for model in "${paths[@]}"; do
     echo "🔍 현재 경로: $model"
-    nohup python scripts/run_phase1.py --model "$model" --use_test --use_wandb --use_lora \
-    --system_prompt "$system_prompt" --user_prompt "$user_prompt" --answer_tag "$answer_tag" --max_lora_rank 64 \
-    --system_prompt2 "$system_prompt2" --user_prompt2 "$user_prompt2"
+    nohup python -m scripts.run_phase1 --model "$model" --use_test --use_wandb \
+    --system_prompt "$system_prompt" --user_prompt "$user_prompt" \
+    --system_prompt2 "$system_prompt2" --user_prompt2 "$user_prompt2" \
+    --answer_tag "$answer_tag" \
+    --gpu_memory_utilization 0.5
 
     dir_name=$(basename $(dirname "$model"))   # "grpo_v2_A.X-4.0-Light_선다형_단답형"
     checkpoint=$(basename "$model")            # "checkpoint-112"
@@ -86,7 +91,9 @@ for model in "${paths[@]}"; do
 
     echo "Model name: $model_name"
 
-    json_path="results/phase1_${model_name}_test_outputs.json"
+    json_path="results/test/phase1_${model_name}_test_outputs.json"
     echo "Scoring: $json_path"
-    python score_only_answer.py --json_path "$json_path" --answer_tag "$answer_tag"
+    python -m scripts.score_only_answer --json_path "$json_path" --answer_tag "$answer_tag"
 done
+
+
