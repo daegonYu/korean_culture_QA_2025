@@ -21,7 +21,7 @@
 korean_culture_QA_2025
 ├─ accelerate/ # FSDP·DeepSpeed 설정 템플릿
 ├─ data/ # (사용자) 원본/전처리 데이터 경로
-├─ example/ # 실행 예시용 스크립트/명령 모음
+├─ run/ # 실행 예시용 스크립트/명령 모음
 ├─ initial_prompts/ # Zero-shot/CoT 등 프롬프트 실험 자료
 ├─ results/ # 평가/로그/그래프 산출물
 ├─ scripts/ # 유틸/실행 스크립트
